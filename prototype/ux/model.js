@@ -107,17 +107,22 @@ export function availabilityLabel(service) {
 
 export function suitability(service, need) {
   const reasons = [];
+  let hardMismatch = false;
+
   if (need.wheelchairAccessRequired && service.rules.wheelchairAccessible !== true) {
     reasons.push("Wheelchair access is not confirmed for this service");
+    hardMismatch = true;
   }
   if (need.hasPet && service.rules.petsAllowed !== true) {
     reasons.push("The service's published pet policy does not match this need");
+    hardMismatch = true;
   }
   if (service.rules.professionalReferralRequired && !need.professionalReferralAvailable) {
     reasons.push("A verified professional referral is required");
   }
+
   return {
-    state: reasons.length ? "NOT_MATCHED" : "SUITABLE",
+    state: hardMismatch ? "NOT_MATCHED" : reasons.length ? "POSSIBLY_SUITABLE" : "SUITABLE",
     reasons,
   };
 }
@@ -157,7 +162,10 @@ export function searchSyntheticServices(need) {
   return syntheticServices
     .map((service) => ({ service, match: suitability(service, need) }))
     .sort((left, right) => {
-      if (left.match.state !== right.match.state) return left.match.state === "SUITABLE" ? -1 : 1;
+      if (left.match.state !== right.match.state) {
+        const rank = { SUITABLE: 0, POSSIBLY_SUITABLE: 1, NOT_MATCHED: 2 };
+        return rank[left.match.state] - rank[right.match.state];
+      }
       const leftConfirmed = ["AVAILABLE", "LIMITED"].includes(left.service.availability.state) ? 0 : 1;
       const rightConfirmed = ["AVAILABLE", "LIMITED"].includes(right.service.availability.state) ? 0 : 1;
       if (leftConfirmed !== rightConfirmed) return leftConfirmed - rightConfirmed;
