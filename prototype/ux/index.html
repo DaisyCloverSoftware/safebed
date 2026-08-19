@@ -19,7 +19,7 @@
   </header>
 
   <main id="main" class="shell" tabindex="-1">
-    <div id="announcement" class="sr-only" aria-live="polite"></div>
+    <div id="announcement" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
     <section id="start-view" class="view" aria-labelledby="start-title">
       <div class="hero">
@@ -29,21 +29,21 @@
       </div>
 
       <div class="role-grid">
-        <button class="role-card" type="button" data-role="PERSON">
-          <strong>I need somewhere safe</strong>
-          <span>Search nearby options for tonight.</span>
+        <button class="role-card" type="button" data-role="PERSON" aria-labelledby="role-person-title" aria-describedby="role-person-description">
+          <strong id="role-person-title">I need somewhere safe</strong>
+          <span id="role-person-description">Search nearby options for tonight.</span>
         </button>
-        <button class="role-card" type="button" data-role="SUPPORTER">
-          <strong>I’m helping someone</strong>
-          <span>Search public-safe information and referral routes.</span>
+        <button class="role-card" type="button" data-role="SUPPORTER" aria-labelledby="role-supporter-title" aria-describedby="role-supporter-description">
+          <strong id="role-supporter-title">I’m helping someone</strong>
+          <span id="role-supporter-description">Search public-safe information and referral routes.</span>
         </button>
-        <button class="role-card" type="button" data-role="PROFESSIONAL">
-          <strong>I’m a support professional</strong>
-          <span>Demonstrate verified referral and hold workflows.</span>
+        <button class="role-card" type="button" data-role="PROFESSIONAL" aria-labelledby="role-professional-title" aria-describedby="role-professional-description">
+          <strong id="role-professional-title">I’m a support professional</strong>
+          <span id="role-professional-description">Demonstrate verified referral and hold workflows.</span>
         </button>
-        <button class="role-card" type="button" data-role="PROVIDER">
-          <strong>I provide accommodation</strong>
-          <span>Demonstrate capacity and referral management.</span>
+        <button class="role-card" type="button" data-role="PROVIDER" aria-labelledby="role-provider-title" aria-describedby="role-provider-description">
+          <strong id="role-provider-title">I provide accommodation</strong>
+          <span id="role-provider-description">Demonstrate capacity and referral management.</span>
         </button>
       </div>
 
@@ -79,17 +79,17 @@
       <button class="text-button" type="button" data-back-to-search>← Change search</button>
       <p id="results-context" class="eyebrow"></p>
       <h1 id="results-title" tabindex="-1">Options for tonight</h1>
-      <p id="results-summary"></p>
+      <p id="results-summary" aria-live="polite" aria-atomic="true"></p>
 
       <div class="toolbar" aria-label="Results controls">
         <div class="segmented" role="tablist" aria-label="Result view">
           <button id="list-tab" role="tab" aria-selected="true" aria-controls="list-panel" type="button">List</button>
           <button id="map-tab" role="tab" aria-selected="false" aria-controls="map-panel" type="button">Map</button>
         </div>
-        <button id="offline-toggle" class="secondary" type="button">Simulate connection lost</button>
+        <button id="offline-toggle" class="secondary" type="button" aria-pressed="false" aria-controls="offline-banner results-list no-placement">Simulate connection lost</button>
       </div>
 
-      <div id="offline-banner" class="warning" hidden role="status">
+      <div id="offline-banner" class="warning" hidden role="status" aria-atomic="true">
         <strong>Live availability cannot be confirmed while offline.</strong>
         <p>Cached service information may still be useful, but do not travel based on a previous capacity count.</p>
       </div>
@@ -120,7 +120,7 @@
           <h2 id="capacity-title">Usable spaces tonight</h2>
           <div class="capacity-control">
             <button id="capacity-minus" type="button" aria-label="Decrease available spaces">−</button>
-            <output id="capacity-output" aria-live="polite">3</output>
+            <output id="capacity-output" aria-live="polite" aria-atomic="true" aria-label="Usable spaces tonight">3</output>
             <button id="capacity-plus" type="button" aria-label="Increase available spaces">+</button>
           </div>
           <p id="capacity-freshness">Confirmed just now</p>
@@ -138,7 +138,7 @@
             <button id="accept-referral" class="primary" type="button">Accept demo referral</button>
             <button id="decline-referral" class="secondary" type="button">Decline</button>
           </div>
-          <p id="provider-referral-status" aria-live="polite">No decision recorded.</p>
+          <p id="provider-referral-status" aria-live="polite" aria-atomic="true">No decision recorded.</p>
         </section>
       </div>
     </section>
@@ -148,13 +148,13 @@
     <form method="dialog" class="dialog-card">
       <button class="dialog-close" value="close" aria-label="Close">×</button>
       <p class="eyebrow">Synthetic workflow</p>
-      <h2 id="dialog-title">Next step</h2>
+      <h2 id="dialog-title" tabindex="-1">Next step</h2>
       <div id="dialog-content"></div>
       <div id="dialog-actions" class="button-row"></div>
     </form>
   </dialog>
 
-  <footer>
+  <footer aria-label="Prototype information">
     <p>SafeBed synthetic UX prototype — fictional data only.</p>
   </footer>
 
