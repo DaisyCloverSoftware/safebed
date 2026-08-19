@@ -1,0 +1,94 @@
+name: Bug report
+
+description: Report a reproducible SafeBed defect using synthetic/public-safe information only.
+
+title: "bug: "
+
+labels:
+  - bug
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Public repository safety
+
+        **SafeBed is not a live emergency-accommodation service. Do not use this issue tracker to request a bed or submit a real referral.**
+
+        This repository is public. Do **not** include:
+
+        - a real person's name, contact details, case/referral information or personal story;
+        - health, safeguarding, criminal, immigration or other sensitive personal information;
+        - a real protected/refuge/host address or precise protected location;
+        - private provider contacts or confidential operating details;
+        - credentials, tokens, API keys, cookies, environment files or production logs;
+        - internal/private organisational information.
+
+        Use fictional/synthetic values such as `Exampletown` and `Synthetic Shelter` when demonstrating a defect.
+
+        If the issue is security-sensitive or could expose protected information, follow the repository **Security policy** instead of opening a public issue.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which public SafeBed area does this affect?
+      options:
+        - Synthetic interoperability sandbox
+        - Synthetic UX prototype
+        - Public API / protocol specification
+        - Standards mapping / documentation
+        - Governance / safeguarding documentation
+        - CI / dependency tooling
+        - Other public-safe project material
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the defect without including real-person, protected-location, credential or confidential provider information.
+      placeholder: "Using the fictional Exampletown fixture, ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Synthetic reproduction
+      description: Give the smallest reproducible example using only fictional/synthetic data. Do not attach production exports or real screenshots containing sensitive information.
+      placeholder: |
+        1. Open the synthetic prototype.
+        2. Choose ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical
+    attributes:
+      label: Sanitised technical context
+      description: Optional browser/version/commit information. Do not paste secrets, request bodies, production logs or protected data.
+      placeholder: "Browser: ...; commit: ..."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-data confirmation
+      options:
+        - label: I confirm this report contains no real service-user/referral information or other personal/sensitive case data.
+          required: true
+        - label: I confirm this report contains no protected accommodation/host location, credential, token, private provider contact or confidential operational information.
+          required: true
+        - label: I understand security-sensitive disclosures belong in the Security policy route, not a public issue.
+          required: true
