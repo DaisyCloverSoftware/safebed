@@ -31,6 +31,7 @@ const dialog = document.querySelector("#action-dialog");
 const dialogTitle = document.querySelector("#dialog-title");
 const dialogContent = document.querySelector("#dialog-content");
 const dialogActions = document.querySelector("#dialog-actions");
+let dialogReturnFocus = null;
 
 const routeLabels = {
   PERSON: "Searching for yourself",
@@ -47,6 +48,12 @@ function showView(target) {
   for (const view of views) view.hidden = view !== target;
   window.scrollTo({ top: 0, behavior: "instant" });
   target.querySelector("h1")?.focus();
+}
+
+function showDialog() {
+  dialogReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  dialog.showModal();
+  window.requestAnimationFrame(() => dialogTitle.focus({ preventScroll: true }));
 }
 
 function policyRole() {
@@ -91,6 +98,7 @@ function renderResults() {
     const action = nextAction(service, policyRole());
     const actionable = match.state === "SUITABLE" || match.state === "POSSIBLY_SUITABLE";
     const actionDisabled = state.offline || !actionable;
+    const actionText = state.offline ? "Live action unavailable" : action.label;
     const matchMessage = match.state === "POSSIBLY_SUITABLE"
       ? `<div class="match-warning"><strong>Potential pathway — another step is required.</strong><ul>${match.reasons.map((reason) => `<li>${reason}</li>`).join("")}</ul></div>`
       : match.state === "NOT_MATCHED"
@@ -109,7 +117,7 @@ function renderResults() {
       ${matchMessage}
       <p class="capability-note">${actionNote(service)}</p>
       <div class="result-footer">
-        ${actionable ? `<button class="result-action" type="button" data-service="${service.id}" data-action="${action.code}" ${actionDisabled ? "disabled" : ""}>${state.offline ? "Live action unavailable" : action.label}</button>` : ""}
+        ${actionable ? `<button class="result-action" type="button" data-service="${service.id}" data-action="${action.code}" aria-label="${actionText} for ${service.name}" ${actionDisabled ? "disabled" : ""}>${actionText}</button>` : ""}
       </div>
     `;
     resultsList.append(card);
@@ -172,7 +180,7 @@ function openInformationalDialog(title, html) {
   dialogTitle.textContent = title;
   dialogContent.innerHTML = html;
   dialogActions.replaceChildren(makeDialogButton("Close", () => dialog.close(), "secondary"));
-  dialog.showModal();
+  showDialog();
 }
 
 function openReferralFlow(service, specialist = false) {
@@ -204,7 +212,7 @@ function openReferralFlow(service, specialist = false) {
   }
 
   renderStep();
-  dialog.showModal();
+  showDialog();
 }
 
 function handleResultAction(serviceId, actionCode) {
@@ -296,6 +304,7 @@ searchForm.addEventListener("submit", (event) => {
   };
   state.offline = false;
   offlineToggle.textContent = "Simulate connection lost";
+  offlineToggle.setAttribute("aria-pressed", "false");
   offlineBanner.hidden = true;
   renderResults();
   setResultTab("list");
@@ -330,6 +339,15 @@ offlineToggle.addEventListener("click", () => {
   state.offline = !state.offline;
   offlineBanner.hidden = !state.offline;
   offlineToggle.textContent = state.offline ? "Restore connection" : "Simulate connection lost";
+  offlineToggle.setAttribute("aria-pressed", String(state.offline));
   renderResults();
   announce(state.offline ? "Connection lost. Live actions disabled." : "Connection restored. Live synthetic availability visible again.");
+});
+
+dialog.addEventListener("close", () => {
+  const returnTarget = dialogReturnFocus;
+  dialogReturnFocus = null;
+  if (returnTarget?.isConnected && !returnTarget.closest("[hidden]")) {
+    returnTarget.focus({ preventScroll: true });
+  }
 });
