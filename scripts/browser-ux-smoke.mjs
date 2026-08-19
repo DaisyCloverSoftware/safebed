@@ -214,6 +214,28 @@ async function key(cdp, keyName, keyCode) {
   await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...params });
 }
 
+async function stopChrome(chrome) {
+  if (chrome.exitCode !== null) return;
+
+  const waitForExit = (timeoutMs) => new Promise((resolvePromise) => {
+    if (chrome.exitCode !== null) {
+      resolvePromise(true);
+      return;
+    }
+    const timer = setTimeout(() => resolvePromise(false), timeoutMs);
+    chrome.once("exit", () => {
+      clearTimeout(timer);
+      resolvePromise(true);
+    });
+  });
+
+  chrome.kill("SIGTERM");
+  if (await waitForExit(3_000)) return;
+
+  chrome.kill("SIGKILL");
+  await waitForExit(2_000);
+}
+
 let passed = 0;
 async function check(name, callback) {
   await callback();
@@ -345,6 +367,6 @@ try {
 } finally {
   page?.close();
   server.close();
-  chrome.kill("SIGTERM");
-  await rm(profileDir, { recursive: true, force: true });
+  await stopChrome(chrome);
+  await rm(profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
