@@ -5,6 +5,7 @@ import type {
   NormalisedAvailability,
   PlacementNeed,
   ProviderAdapter,
+  ProviderCapabilities,
   PublicService,
   Referral,
   Reservation,
@@ -25,7 +26,7 @@ export class SafeBedSandbox {
     for (const provider of this.#providers) {
       for (const service of provider.listServices()) {
         const availability = await this.#availability(provider, service.serviceId, now);
-        matches.push(this.#match(service, need, availability));
+        matches.push(this.#match(service, provider.capabilities, need, availability));
       }
     }
 
@@ -147,6 +148,7 @@ export class SafeBedSandbox {
 
   #match(
     service: PublicService,
+    providerCapabilities: ProviderCapabilities,
     need: PlacementNeed,
     availability: NormalisedAvailability,
   ): MatchResult {
@@ -189,7 +191,7 @@ export class SafeBedSandbox {
         ? "POSSIBLY_SUITABLE"
         : "SUITABLE";
 
-    return { service, matchState, reasons, availability };
+    return { service, providerCapabilities, matchState, reasons, availability };
   }
 
   #rank(match: MatchResult): number {
