@@ -31,6 +31,18 @@ The first technical target is intentionally narrow:
 
 > Can several materially different emergency-accommodation providers safely expose sufficiently current availability through a common interface without replacing their existing systems?
 
+## Discovery documents
+
+- [SafeBed Availability Protocol v0.1](docs/safebed-availability-protocol-v0.1.md)
+- [Provider Discovery & Interview Pack v0.1](docs/provider-discovery-interview-pack-v0.1.md)
+- [Emergency Accommodation Interoperability Pilot v0.1](docs/pilot-proposition-v0.1.md)
+- [Security, Privacy & Safeguarding Model v0.1](docs/security-privacy-safeguarding-model-v0.1.md)
+- [UX Journeys v0.1](docs/ux-journeys-v0.1.md)
+- [Discovery OpenAPI contract](api/openapi.yaml)
+- [Security reporting policy](SECURITY.md)
+
+These documents are working proposals for review and co-design. They are not production policy, legal advice, a completed DPIA, or a commitment by any external organisation.
+
 ## Standards direction
 
 SafeBed is being designed as an Open Referral UK / Human Services Data Specification (HSDS) compatible profile. HSDS already models service capacity, including available and maximum capacity with update timestamps. SafeBed therefore focuses on the transactional and safeguarding layer around that data: freshness, suitability, protected disclosure, referrals, holds, reservations and arrival.
@@ -42,8 +54,19 @@ Useful references:
 - UK Government homelessness strategy: https://www.gov.uk/government/publications/a-national-plan-to-end-homelessness
 - ICO guidance on special-category data: https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/lawful-basis/a-guide-to-lawful-basis/special-category-data/
 
-## Repository status
+## Public repository safety
 
-This repository is public because interoperability work benefits from scrutiny and open discussion. It must not contain confidential provider information, identifiable service-user information, protected accommodation locations, credentials or private operational material.
+This repository is public because interoperability work benefits from scrutiny and open discussion. It must not contain:
 
-Detailed discovery documents will be added under `docs/`.
+- confidential provider information;
+- identifiable service-user or referral information;
+- protected accommodation locations;
+- credentials, tokens or secrets;
+- private operational contacts;
+- sensitive logs, screenshots or production data.
+
+Use synthetic examples and fixtures only. Security issues that could expose people, protected locations or privileged systems must not be reported through a public issue; see [SECURITY.md](SECURITY.md).
+
+## Licensing
+
+A project/software licence has **not yet been selected**. Public visibility should not be interpreted as permission to reuse the code or specifications under an open-source licence until an explicit licence is added.
