@@ -1,0 +1,836 @@
+openapi: 3.1.0
+info:
+  title: SafeBed API
+  version: 0.1.0-discovery
+  summary: Discovery contract for safe emergency-accommodation interoperability.
+  description: |
+    SafeBed is a public-good emergency-accommodation interoperability project.
+    This contract is intentionally pre-production and uses synthetic/example data only.
+
+    The provider remains authoritative for inventory, admission and safeguarding decisions.
+    Open Referral UK / HSDS should be reused for service-directory concepts wherever possible.
+
+    No endpoint in this contract implies that protected accommodation information is public.
+    Disclosure is controlled by the authenticated actor, provider policy and placement state.
+  license:
+    name: License not yet selected
+externalDocs:
+  description: SafeBed discovery documentation
+  url: https://github.com/DaisyCloverSoftware/safebed/tree/main/docs
+
+servers:
+  - url: https://example.invalid
+    description: Placeholder only; no production API is published by this specification.
+
+tags:
+  - name: Services
+  - name: Matching
+  - name: Referrals
+  - name: Holds
+  - name: Reservations
+  - name: Placements
+
+paths:
+  /v1/services/search:
+    get:
+      tags: [Services]
+      summary: Discover candidate emergency-accommodation services
+      description: |
+        Public-safe service discovery. Exact protected locations and privileged provider data
+        must not be returned to an anonymous caller.
+      security: []
+      parameters:
+        - in: query
+          name: latitude
+          schema:
+            type: number
+            format: double
+            minimum: -90
+            maximum: 90
+        - in: query
+          name: longitude
+          schema:
+            type: number
+            format: double
+            minimum: -180
+            maximum: 180
+        - in: query
+          name: radius_km
+          schema:
+            type: number
+            minimum: 0.1
+            maximum: 100
+            default: 10
+        - in: query
+          name: required_for
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Candidate services safe to disclose to the caller.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ServiceSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/services/{service_id}/availability:
+    get:
+      tags: [Services]
+      summary: Read normalised availability for a service
+      parameters:
+        - $ref: "#/components/parameters/ServiceId"
+      responses:
+        "200":
+          description: Availability state appropriate to the caller's disclosure level.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Availability"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Authoritative availability source cannot currently be confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/matches:
+    post:
+      tags: [Matching]
+      summary: Match a temporary placement need to candidate services
+      description: |
+        Matching is suitability assistance, not an admission decision. Anonymous or minimally
+        identifying requests should be supported wherever possible.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlacementNeed"
+      responses:
+        "200":
+          description: Candidate matches with explicit, inspectable reasons.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [matches]
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MatchResult"
+                  outcome:
+                    $ref: "#/components/schemas/SearchOutcome"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/referrals:
+    post:
+      tags: [Referrals]
+      summary: Submit a referral to a provider
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReferralCreate"
+      responses:
+        "201":
+          description: Referral accepted for provider workflow, not necessarily accepted for placement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Referral"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/referrals/{referral_id}:
+    get:
+      tags: [Referrals]
+      summary: Read referral status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReferralId"
+      responses:
+        "200":
+          description: Referral state visible to the authorised caller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Referral"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/holds:
+    post:
+      tags: [Holds]
+      summary: Request a time-limited provider-authorised capacity hold
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HoldCreate"
+      responses:
+        "201":
+          description: Hold created by/against the authoritative provider workflow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hold"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Capacity was consumed or changed before the hold could be granted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                capacityConflict:
+                  value:
+                    code: CAPACITY_CONFLICT
+                    message: The requested capacity is no longer available.
+
+  /v1/holds/{hold_id}:
+    delete:
+      tags: [Holds]
+      summary: Release a hold
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/HoldId"
+      responses:
+        "204":
+          description: Hold released or already inactive.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/reservations:
+    post:
+      tags: [Reservations]
+      summary: Request provider-confirmed reservation/placement allocation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationCreate"
+      responses:
+        "201":
+          description: Reservation confirmed by the provider workflow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/placements/{placement_id}/arrival:
+    post:
+      tags: [Placements]
+      summary: Record authorised arrival confirmation
+      description: Device tracking is not required. Provider or authorised-worker confirmation is preferred.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PlacementId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arrived_at:
+                  type: string
+                  format: date-time
+                provider_reference:
+                  type: string
+                  maxLength: 200
+      responses:
+        "200":
+          description: Arrival recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Placement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Provisional discovery mechanism; production identity architecture is not yet selected.
+
+  parameters:
+    ServiceId:
+      in: path
+      name: service_id
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReferralId:
+      in: path
+      name: referral_id
+      required: true
+      schema:
+        type: string
+        format: uuid
+    HoldId:
+      in: path
+      name: hold_id
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PlacementId:
+      in: path
+      name: placement_id
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+      description: Client-generated unique key used to make transactional retries safe.
+
+  responses:
+    BadRequest:
+      description: Request is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Authentication is required or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Caller is authenticated but not permitted to perform or disclose this operation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found or not visible to the caller.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Current provider/source state conflicts with the requested operation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    DisclosureLevel:
+      type: string
+      enum:
+        - PUBLIC
+        - VERIFIED_USER
+        - PLACEMENT_AUTHORISED
+        - RESTRICTED
+        - SEALED
+
+    AvailabilityState:
+      type: string
+      enum:
+        - AVAILABLE
+        - LIMITED
+        - FULL
+        - HELD
+        - RESERVATION_PENDING
+        - CLOSED
+        - MANUAL_CONFIRMATION_REQUIRED
+        - STALE
+        - UNKNOWN
+
+    Availability:
+      type: object
+      required:
+        - service_id
+        - state
+        - observed_at
+        - disclosure_level
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        state:
+          $ref: "#/components/schemas/AvailabilityState"
+        available_units:
+          type: integer
+          minimum: 0
+        maximum_units:
+          type: integer
+          minimum: 0
+        unit_type:
+          type: string
+          enum:
+            - BED
+            - ROOM
+            - FAMILY_UNIT
+            - HOST_PLACEMENT
+            - ACCESSIBLE_UNIT
+            - EMERGENCY_SPACE
+        source_updated_at:
+          type: [string, "null"]
+          format: date-time
+        observed_at:
+          type: string
+          format: date-time
+        fresh_until:
+          type: [string, "null"]
+          format: date-time
+        disclosure_level:
+          $ref: "#/components/schemas/DisclosureLevel"
+        confirmation_required:
+          type: boolean
+          default: false
+
+    ServiceSummary:
+      type: object
+      required:
+        - service_id
+        - name
+        - disclosure_level
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 300
+        description:
+          type: string
+          maxLength: 2000
+        approximate_distance_km:
+          type: number
+          minimum: 0
+        public_area_label:
+          type: string
+          maxLength: 200
+          description: Public-safe area description; must not leak a protected exact location.
+        availability:
+          $ref: "#/components/schemas/Availability"
+        disclosure_level:
+          $ref: "#/components/schemas/DisclosureLevel"
+
+    PlacementNeed:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        search_radius_km:
+          type: number
+          minimum: 0.1
+          maximum: 100
+          default: 10
+        required_for:
+          type: string
+          format: date
+        household_size:
+          type: integer
+          minimum: 1
+          maximum: 20
+        adult_count:
+          type: integer
+          minimum: 0
+          maximum: 20
+        child_count:
+          type: integer
+          minimum: 0
+          maximum: 20
+        accessibility_required:
+          type: boolean
+        wheelchair_access_required:
+          type: boolean
+        assistance_animal:
+          type: boolean
+        other_pets:
+          type: boolean
+        couple_joint_placement_required:
+          type: boolean
+        family_unit_required:
+          type: boolean
+        professional_referral_available:
+          type: boolean
+        latest_arrival_at:
+          type: string
+          format: date-time
+        specialist_pathway:
+          type: string
+          maxLength: 200
+          description: Controlled vocabulary to be defined; must not be used to expose restricted services.
+
+    MatchState:
+      type: string
+      enum:
+        - SUITABLE
+        - POSSIBLY_SUITABLE
+        - NOT_MATCHED
+        - INSUFFICIENT_INFORMATION
+
+    MatchReason:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum:
+            - AGE_OUTSIDE_SERVICE_RANGE
+            - HOUSEHOLD_TYPE_UNSUPPORTED
+            - FAMILY_UNIT_UNAVAILABLE
+            - ACCESSIBILITY_UNKNOWN
+            - PROFESSIONAL_REFERRAL_REQUIRED
+            - CHECK_IN_DEADLINE_PASSED
+            - PET_POLICY_INCOMPATIBLE
+            - SERVICE_AREA_RESTRICTION
+            - CAPACITY_UNCONFIRMED
+            - SPECIALIST_ASSESSMENT_REQUIRED
+        message:
+          type: string
+          maxLength: 500
+
+    MatchResult:
+      type: object
+      required:
+        - service
+        - match_state
+        - reasons
+      properties:
+        service:
+          $ref: "#/components/schemas/ServiceSummary"
+        match_state:
+          $ref: "#/components/schemas/MatchState"
+        reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchReason"
+
+    SearchOutcome:
+      type: string
+      enum:
+        - CANDIDATES_FOUND
+        - NO_CONFIRMED_PLACEMENT
+
+    ReferralStatus:
+      type: string
+      enum:
+        - DRAFT
+        - SUBMITTED
+        - UNDER_REVIEW
+        - ACCEPTED
+        - DECLINED
+        - MORE_INFORMATION_REQUIRED
+        - WITHDRAWN
+        - EXPIRED
+
+    ReferralCreate:
+      type: object
+      required:
+        - service_id
+        - placement_need
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        external_case_reference:
+          type: string
+          maxLength: 200
+          description: Optional reference to an authoritative external case; avoid duplicating full case data.
+        placement_need:
+          $ref: "#/components/schemas/PlacementNeed"
+        minimum_referral_data:
+          type: object
+          additionalProperties: true
+          description: Discovery placeholder. Production schema must be provider-driven, minimised and field-classified.
+
+    Referral:
+      type: object
+      required:
+        - referral_id
+        - service_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        referral_id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+        provider_reference:
+          type: [string, "null"]
+          maxLength: 200
+        status:
+          $ref: "#/components/schemas/ReferralStatus"
+        reason_code:
+          type: [string, "null"]
+          maxLength: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    HoldCreate:
+      type: object
+      required:
+        - service_id
+        - referral_id
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        referral_id:
+          type: string
+          format: uuid
+        requested_seconds:
+          type: integer
+          minimum: 60
+          maximum: 7200
+          description: Provider may grant a shorter duration or reject holds entirely.
+        expected_source_revision:
+          type: string
+          maxLength: 300
+
+    HoldStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - RELEASED
+        - EXPIRED
+        - CONSUMED
+        - CANCELLED
+
+    Hold:
+      type: object
+      required:
+        - hold_id
+        - service_id
+        - referral_id
+        - status
+        - created_at
+        - expires_at
+      properties:
+        hold_id:
+          type: string
+          format: uuid
+        service_id:
+          type: string
+          format: uuid
+        referral_id:
+          type: string
+          format: uuid
+        provider_reference:
+          type: [string, "null"]
+          maxLength: 200
+        status:
+          $ref: "#/components/schemas/HoldStatus"
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    ReservationCreate:
+      type: object
+      required:
+        - referral_id
+      properties:
+        referral_id:
+          type: string
+          format: uuid
+        hold_id:
+          type: [string, "null"]
+          format: uuid
+        expected_source_revision:
+          type: string
+          maxLength: 300
+
+    ReservationStatus:
+      type: string
+      enum:
+        - CONFIRMED
+        - CANCELLED
+        - EXPIRED
+        - ARRIVED
+        - NO_SHOW
+
+    Reservation:
+      type: object
+      required:
+        - reservation_id
+        - referral_id
+        - status
+        - reserved_at
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+        referral_id:
+          type: string
+          format: uuid
+        placement_id:
+          type: string
+          format: uuid
+        provider_reference:
+          type: [string, "null"]
+          maxLength: 200
+        status:
+          $ref: "#/components/schemas/ReservationStatus"
+        reserved_at:
+          type: string
+          format: date-time
+        arrival_deadline:
+          type: [string, "null"]
+          format: date-time
+        destination:
+          $ref: "#/components/schemas/DisclosedDestination"
+
+    DisclosedDestination:
+      type: object
+      description: Returned only when caller and placement state authorise disclosure.
+      properties:
+        disclosure_level:
+          $ref: "#/components/schemas/DisclosureLevel"
+        address_text:
+          type: string
+          maxLength: 500
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        arrival_instructions:
+          type: string
+          maxLength: 2000
+
+    Placement:
+      type: object
+      required:
+        - placement_id
+        - status
+      properties:
+        placement_id:
+          type: string
+          format: uuid
+        reservation_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - RESERVED
+            - ARRIVED
+            - CANCELLED
+            - NO_SHOW
+            - COMPLETED
+        arrived_at:
+          type: [string, "null"]
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 1000
+        correlation_id:
+          type: string
+          maxLength: 200
