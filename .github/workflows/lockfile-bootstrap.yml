@@ -1,0 +1,170 @@
+name: Lockfile bootstrap
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/lockfile-bootstrap.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: github.event_name == 'pull_request' && github.head_ref == 'build/reproducible-ci-v0.1' && github.event.pull_request.head.repo.full_name == github.repository
+    name: Bootstrap reproducible dependency state
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out the SafeBed bootstrap branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+
+      - name: Use Node.js 24.19.0 LTS
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+          package-manager-cache: false
+
+      - name: Generate canonical registry lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Add lockfile integrity policy
+        run: |
+          mkdir -p scripts
+          cat > scripts/check-lockfile.mjs <<'EOF'
+          import { readFile } from "node:fs/promises";
+
+          const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+          const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+
+          if (lock.lockfileVersion !== 3) {
+            throw new Error(`Expected npm lockfileVersion 3, received ${lock.lockfileVersion}.`);
+          }
+
+          const declared = {
+            ...(packageJson.dependencies ?? {}),
+            ...(packageJson.devDependencies ?? {}),
+          };
+
+          for (const [name, spec] of Object.entries(declared)) {
+            if (/^[~^*]|\s-\s|\|\||\s/.test(spec)) {
+              throw new Error(`Dependency ${name} must use an exact version; received ${spec}.`);
+            }
+          }
+
+          for (const [path, entry] of Object.entries(lock.packages ?? {})) {
+            if (!path) continue;
+            if (entry.link) continue;
+            if (entry.hasInstallScript) {
+              throw new Error(`Install lifecycle script requires explicit security review: ${path}`);
+            }
+            if (typeof entry.resolved === "string" && entry.resolved.startsWith("https://registry.npmjs.org/") && !entry.integrity) {
+              throw new Error(`Registry package is missing integrity metadata: ${path}`);
+            }
+          }
+
+          console.log("Lockfile policy passed: exact direct versions, no install scripts, registry integrity present.");
+          EOF
+
+          node --input-type=module <<'EOF'
+          import { readFile, writeFile } from "node:fs/promises";
+          const path = new URL("./package.json", import.meta.url);
+          const pkg = JSON.parse(await readFile(path, "utf8"));
+          pkg.scripts = {
+            ...pkg.scripts,
+            "lockfile:check": "node scripts/check-lockfile.mjs"
+          };
+          await writeFile(path, `${JSON.stringify(pkg, null, 2)}\n`);
+          EOF
+
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm run lockfile:check
+
+      - name: Replace ordinary validation with reproducible npm ci
+        run: |
+          cat > .github/workflows/synthetic-sandbox.yml <<'EOF'
+          name: Synthetic sandbox
+
+          on:
+            pull_request:
+              paths:
+                - "src/**"
+                - "test/**"
+                - "scripts/**"
+                - "package.json"
+                - "package-lock.json"
+                - "tsconfig.json"
+                - ".github/workflows/synthetic-sandbox.yml"
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: synthetic-sandbox-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            validate:
+              name: Test, type-check and dependency policy
+              runs-on: ubuntu-24.04
+              timeout-minutes: 10
+
+              steps:
+                - name: Check out repository
+                  uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+                  with:
+                    persist-credentials: false
+
+                - name: Use Node.js 24.19.0 LTS
+                  uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+                  with:
+                    node-version: "24.19.0"
+                    package-manager-cache: false
+
+                - name: Install exact locked dependencies without lifecycle scripts
+                  run: npm ci --ignore-scripts --no-audit --no-fund
+
+                - name: Validate dependency lock policy
+                  run: npm run lockfile:check
+
+                - name: Run synthetic safety regression suite
+                  run: npm test
+
+                - name: Run strict TypeScript check
+                  run: npm run typecheck
+          EOF
+
+      - name: Add dependency maintenance configuration
+        run: |
+          cat > .github/dependabot.yml <<'EOF'
+          version: 2
+          updates:
+            - package-ecosystem: "npm"
+              directory: "/"
+              schedule:
+                interval: "weekly"
+              open-pull-requests-limit: 5
+            - package-ecosystem: "github-actions"
+              directory: "/"
+              schedule:
+                interval: "weekly"
+              open-pull-requests-limit: 5
+          EOF
+
+      - name: Remove temporary bootstrap workflows
+        run: rm -f .github/workflows/lockfile-proof.yml .github/workflows/lockfile-bootstrap.yml
+
+      - name: Commit canonical dependency state to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json scripts/check-lockfile.mjs .github/workflows/synthetic-sandbox.yml .github/dependabot.yml
+          git add -u .github/workflows/lockfile-proof.yml .github/workflows/lockfile-bootstrap.yml
+          git diff --cached --check
+          git commit -m "build: lock reproducible sandbox dependencies"
+          git push origin "HEAD:${{ github.head_ref }}"
