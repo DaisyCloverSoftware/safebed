@@ -24,7 +24,7 @@
     <section id="start-view" class="view" aria-labelledby="start-title">
       <div class="hero">
         <p class="eyebrow">Find somewhere safe tonight</p>
-        <h1 id="start-title">What do you need to do?</h1>
+        <h1 id="start-title" tabindex="-1">What do you need to do?</h1>
         <p>Choose the route that best matches the situation. Basic discovery does not require an account in this prototype.</p>
       </div>
 
@@ -56,7 +56,7 @@
     <section id="search-view" class="view" hidden aria-labelledby="search-title">
       <button class="text-button" type="button" data-back>← Change route</button>
       <p id="role-context" class="eyebrow"></p>
-      <h1 id="search-title">Find somewhere safe tonight</h1>
+      <h1 id="search-title" tabindex="-1">Find somewhere safe tonight</h1>
       <p>Only answer what is needed to narrow the synthetic options.</p>
 
       <form id="search-form" class="search-form">
@@ -78,7 +78,7 @@
     <section id="results-view" class="view" hidden aria-labelledby="results-title">
       <button class="text-button" type="button" data-back-to-search>← Change search</button>
       <p id="results-context" class="eyebrow"></p>
-      <h1 id="results-title">Options for tonight</h1>
+      <h1 id="results-title" tabindex="-1">Options for tonight</h1>
       <p id="results-summary"></p>
 
       <div class="toolbar" aria-label="Results controls">
@@ -113,7 +113,7 @@
     <section id="provider-view" class="view" hidden aria-labelledby="provider-title">
       <button class="text-button" type="button" data-back>← Change route</button>
       <p class="eyebrow">Provider demonstration</p>
-      <h1 id="provider-title">Tonight’s synthetic capacity</h1>
+      <h1 id="provider-title" tabindex="-1">Tonight’s synthetic capacity</h1>
 
       <div class="provider-grid">
         <section class="panel" aria-labelledby="capacity-title">
