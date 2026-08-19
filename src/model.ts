@@ -27,6 +27,23 @@ export type ActorRole =
   | "PROVIDER"
   | "SPECIALIST_AUTHORISED";
 
+export type ProviderIntegrationMode =
+  | "LIVE_API"
+  | "READ_ONLY_FEED"
+  | "SAFEBED_PORTAL"
+  | "MANUAL_CONFIRMATION"
+  | "RESTRICTED_SPECIALIST";
+
+export type ReferralMode = "SAFEBED_TRANSACTION" | "SAFEBED_PORTAL" | "EXTERNAL_MANUAL";
+export type ReservationMode = "SAFEBED_TRANSACTION" | "SAFEBED_PORTAL" | "EXTERNAL_MANUAL";
+
+export interface ProviderCapabilities {
+  readonly integrationMode: ProviderIntegrationMode;
+  readonly referralMode: ReferralMode;
+  readonly holdSupported: boolean;
+  readonly reservationMode: ReservationMode;
+}
+
 export type ReferralStatus =
   | "SUBMITTED"
   | "UNDER_REVIEW"
@@ -104,6 +121,7 @@ export interface MatchReason {
 
 export interface MatchResult {
   readonly service: PublicService;
+  readonly providerCapabilities: ProviderCapabilities;
   readonly matchState: MatchState;
   readonly reasons: readonly MatchReason[];
   readonly availability: NormalisedAvailability;
@@ -144,6 +162,7 @@ export interface Reservation {
 
 export interface ProviderAdapter {
   readonly providerId: string;
+  readonly capabilities: ProviderCapabilities;
   listServices(): readonly PublicService[];
   getAvailability(serviceId: string, now: Date): Promise<CapacitySnapshot>;
   submitReferral(serviceId: string, now: Date): Promise<Referral>;
