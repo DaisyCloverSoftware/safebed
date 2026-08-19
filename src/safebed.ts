@@ -184,7 +184,11 @@ export class SafeBedSandbox {
       reasons.push({ code: "CAPACITY_UNCONFIRMED", message: "Current usable capacity cannot be treated as confirmed." });
     }
 
-    const hardMismatch = reasons.some((reason) => reason.code !== "CAPACITY_UNCONFIRMED");
+    const pathwayReasons = new Set<MatchReason["code"]>([
+      "CAPACITY_UNCONFIRMED",
+      "PROFESSIONAL_REFERRAL_REQUIRED",
+    ]);
+    const hardMismatch = reasons.some((reason) => !pathwayReasons.has(reason.code));
     const matchState = hardMismatch
       ? "NOT_MATCHED"
       : reasons.length > 0
