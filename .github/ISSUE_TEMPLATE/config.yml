@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security or sensitive disclosure
+    url: https://github.com/DaisyCloverSoftware/safebed/security/policy
+    about: Do not post credentials, protected locations, real referral/person data, or exploitable security details in a public issue. Follow the security policy instead.
