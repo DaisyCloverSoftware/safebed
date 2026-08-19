@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -19,10 +19,10 @@ function findChrome() {
     try {
       return execFileSync("which", [name], { encoding: "utf8" }).trim();
     } catch {
-      // Try the next browser name available on the hosted runner.
+      // Try the next hosted-runner browser name.
     }
   }
-  throw new Error("No supported Chrome/Chromium executable is available on this runner.");
+  throw new Error("No supported Chrome/Chromium executable is available.");
 }
 
 async function startStaticServer() {
@@ -54,7 +54,7 @@ async function startStaticServer() {
     server.listen(0, "127.0.0.1", resolvePromise);
   });
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Unable to determine local server port.");
+  if (!address || typeof address === "string") throw new Error("Could not determine static-server port.");
   return { server, baseUrl: `http://127.0.0.1:${address.port}` };
 }
 
@@ -81,17 +81,15 @@ async function startChrome() {
 
   const chrome = spawn(chromePath, args, { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
-  let exitCode = null;
   let spawnError = null;
   chrome.stderr.setEncoding("utf8");
   chrome.stderr.on("data", (chunk) => { stderr += chunk; });
-  chrome.once("exit", (code) => { exitCode = code; });
   chrome.once("error", (error) => { spawnError = error; });
 
   const deadline = Date.now() + 45_000;
   while (Date.now() < deadline) {
     if (spawnError) throw spawnError;
-    if (exitCode !== null) throw new Error(`Chrome exited before DevTools was ready (code ${exitCode}).\n${stderr}`);
+    if (chrome.exitCode !== null) throw new Error(`Chrome exited before DevTools was ready.\n${stderr}`);
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1_000) });
       if (response.ok) {
@@ -103,7 +101,7 @@ async function startChrome() {
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
   }
-  throw new Error(`Timed out waiting for Chrome DevTools endpoint.\n${stderr}`);
+  throw new Error(`Timed out waiting for Chrome DevTools.\n${stderr}`);
 }
 
 class CdpClient {
@@ -116,7 +114,6 @@ class CdpClient {
   }
 
   async open() {
-    if (this.#socket.readyState === WebSocket.OPEN) return;
     await new Promise((resolvePromise, reject) => {
       this.#socket.addEventListener("open", resolvePromise, { once: true });
       this.#socket.addEventListener("error", reject, { once: true });
@@ -154,10 +151,7 @@ async function createPage(port, url) {
   const target = await response.json();
   const cdp = new CdpClient(target.webSocketDebuggerUrl);
   await cdp.open();
-  await cdp.send("Runtime.enable");
-  await cdp.send("Page.enable");
-  await cdp.send("DOM.enable");
-  await cdp.send("Accessibility.enable");
+  for (const domain of ["Runtime", "Page", "DOM", "Accessibility"]) await cdp.send(`${domain}.enable`);
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: 1280,
     height: 800,
@@ -183,7 +177,7 @@ async function waitFor(cdp, expression, description, timeoutMs = 5_000) {
     if (await evaluate(cdp, expression)) return;
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 40));
   }
-  throw new Error(`Timed out waiting for: ${description}`);
+  throw new Error(`Timed out waiting for ${description}.`);
 }
 
 async function key(cdp, keyName, keyCode) {
@@ -218,13 +212,17 @@ function axProperty(node, name) {
   return node.properties?.find((property) => property.name === name)?.value?.value;
 }
 
+function axBooleanProperty(node, name) {
+  const value = axProperty(node, name);
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return value;
+}
+
 async function stopChrome(chrome) {
   if (chrome.exitCode !== null) return;
   const waitForExit = (timeoutMs) => new Promise((resolvePromise) => {
-    if (chrome.exitCode !== null) {
-      resolvePromise(true);
-      return;
-    }
+    if (chrome.exitCode !== null) return resolvePromise(true);
     const timer = setTimeout(() => resolvePromise(false), timeoutMs);
     chrome.once("exit", () => {
       clearTimeout(timer);
@@ -257,8 +255,7 @@ try {
     const skip = await axNode(page, ".skip-link");
     assert.equal(axValue(skip, "role"), "link");
     assert.equal(axValue(skip, "name"), "Skip to main content");
-    const main = await axNode(page, "#main");
-    assert.equal(axValue(main, "role"), "main");
+    assert.equal(axValue(await axNode(page, "#main"), "role"), "main");
   });
 
   await check("route buttons expose concise names with separate descriptions", async () => {
@@ -271,7 +268,7 @@ try {
   await evaluate(page, "document.querySelector('[data-role=PERSON]').click()");
   await waitFor(page, "document.querySelector('#search-view').hidden === false", "search view");
 
-  await check("active screen heading is exposed as level-one heading and receives focus", async () => {
+  await check("active screen heading is level one and receives focus", async () => {
     const heading = await axNode(page, "#search-title");
     assert.equal(axValue(heading, "role"), "heading");
     assert.equal(axValue(heading, "name"), "Find somewhere safe tonight");
@@ -294,24 +291,24 @@ try {
     }
   });
 
-  await check("offline control exposes toggle state and live actions become disabled", async () => {
+  await check("offline control exposes toggle state and disables live actions", async () => {
     let toggle = await axNode(page, "#offline-toggle");
-    assert.equal(axProperty(toggle, "pressed"), false);
+    assert.equal(axBooleanProperty(toggle, "pressed"), false);
     await evaluate(page, "document.querySelector('#offline-toggle').click()");
     toggle = await axNode(page, "#offline-toggle");
-    assert.equal(axProperty(toggle, "pressed"), true);
+    assert.equal(axBooleanProperty(toggle, "pressed"), true);
     assert.equal(await evaluate(page, "document.querySelector('#offline-banner').hidden"), false);
     assert.equal(await evaluate(page, "[...document.querySelectorAll('.result-action')].every(button => button.disabled)"), true);
     await evaluate(page, "document.querySelector('#offline-toggle').click()");
   });
 
-  await check("modal dialog exposes its title, focuses it, and restores invoking focus", async () => {
+  await check("dialog exposes its title, focuses it, and restores invoking focus", async () => {
     await evaluate(page, "document.querySelector('[data-service=read-only]').focus(); document.querySelector('[data-service=read-only]').click()");
     await waitFor(page, "document.querySelector('#action-dialog').open", "information dialog");
-    await waitFor(page, "document.activeElement?.id === 'dialog-title'", "dialog title focus");
-    const dialog = await axNode(page, "#action-dialog");
-    assert.equal(axValue(dialog, "role"), "dialog");
-    assert.equal(axValue(dialog, "name"), "Use the provider's existing route");
+    await waitFor(page, "document.activeElement?.id === 'dialog-title'", "dialog-title focus");
+    const modal = await axNode(page, "#action-dialog");
+    assert.equal(axValue(modal, "role"), "dialog");
+    assert.equal(axValue(modal, "name"), "Use the provider's existing route");
     await key(page, "Escape", 27);
     await waitFor(page, "!document.querySelector('#action-dialog').open", "dialog close");
     assert.equal(await evaluate(page, "document.activeElement?.dataset.service"), "read-only");
@@ -329,7 +326,7 @@ try {
     assert.equal(await evaluate(page, "document.activeElement?.id"), "provider-title");
   });
 
-  await check("only the visible view contributes a level-one heading to the accessibility tree", async () => {
+  await check("hidden views do not leak extra level-one headings into the accessibility tree", async () => {
     const tree = await page.send("Accessibility.getFullAXTree");
     const headings = tree.nodes
       .filter((node) => !node.ignored && axValue(node, "role") === "heading" && axProperty(node, "level") === 1)
@@ -337,7 +334,7 @@ try {
     assert.deepEqual(headings, ["Tonight’s synthetic capacity"]);
   });
 
-  await check("320px reflow retains the public search without horizontal page scrolling", async () => {
+  await check("320px reflow has no horizontal page scroll", async () => {
     await page.send("Emulation.setDeviceMetricsOverride", {
       width: 320,
       height: 720,
