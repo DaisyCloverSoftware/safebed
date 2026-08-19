@@ -33,7 +33,7 @@ The first technical target is intentionally narrow:
 
 ## Standards direction
 
-SafeBed is being designed as an Open Referral UK / Human Services Data Specification (HSDS) compatible profile. HSDS already models service capacity, including available and maximum capacity with update timestamps. SafeBed therefore focuses on the transactional and safeguarding layer around that data: freshness, suitability, protected disclosure, referrals, holds, reservations and arrival.
+SafeBed is being designed to interoperate with **Open Referral UK (ORUK)** for current UK service-directory data and to align its availability model with the wider **Human Services Data Specification (HSDS)**. The current UK profile is ORUK 3.0. International HSDS 3.1 introduced `service_capacity`, including available/maximum units and an update timestamp; that capacity object is not currently part of the published ORUK 3.0 profile. SafeBed therefore treats real-time accommodation availability and placement transactions as a carefully defined extension/profile layer while preserving ORUK-compatible service discovery.
 
 Useful references:
 
