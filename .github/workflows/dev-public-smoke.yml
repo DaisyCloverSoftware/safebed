@@ -1,0 +1,29 @@
+name: DEV public smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dev-public-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: External SafeBed DEV HTTPS smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify public synthetic UX
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://dev-safebed.daisycloversoftware.uk/'
+          headers="$RUNNER_TEMP/headers.txt"
+          body="$RUNNER_TEMP/body.html"
+          code="$(curl --silent --show-error --location --max-time 20 --connect-timeout 10 --dump-header "$headers" --output "$body" --write-out '%{http_code}' "$url")"
+          [[ "$code" == '200' ]]
+          grep -Fq 'SafeBed synthetic UX prototype' "$body"
+          grep -Fq 'No real services, people or locations are shown.' "$body"
+          grep -Eiq '^content-type:[[:space:]]*text/html' "$headers"
+          echo "SafeBed DEV external HTTPS smoke passed: HTTP $code and synthetic markers verified."
