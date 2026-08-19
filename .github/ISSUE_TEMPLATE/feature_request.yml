@@ -1,0 +1,83 @@
+name: Feature / design proposal
+
+description: Propose a SafeBed improvement using public-safe, synthetic examples only.
+
+title: "proposal: "
+
+labels:
+  - enhancement
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Public repository safety
+
+        SafeBed deals with high-risk welfare/safeguarding concepts. This issue is public.
+
+        Do **not** include real service-user/referral data, health/safeguarding narratives, protected accommodation/host locations, credentials, private provider contacts, confidential contracts/workflows or internal organisational information.
+
+        Use fictional/synthetic scenarios only. If a proposal depends on confidential evidence, describe the public-safe design problem and reference private governed evidence separately rather than pasting it here.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Proposal area
+      options:
+        - Person/supporter UX
+        - Professional referral workflow
+        - Provider workflow
+        - Availability / capacity interoperability
+        - Standards / protocol
+        - Protected accommodation / safeguarding
+        - Accessibility / digital exclusion
+        - Privacy / data minimisation
+        - Security / identity / authorisation
+        - Evaluation / unmet-demand evidence
+        - CI / engineering tooling
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What public-safe problem are you trying to solve?
+      description: Describe the need before proposing a solution. Use synthetic examples only.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Explain the smallest useful change and how it avoids duplicating an existing system/standard where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: safeguarding
+    attributes:
+      label: Safety / privacy / accessibility considerations
+      description: What could this change expose, exclude, misclassify or make harder for a person needing help, supporter, provider or protected service?
+      placeholder: "Consider public vs protected disclosure, stale availability, accessibility, unnecessary personal data, provider authority, offline behaviour..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: standards
+    attributes:
+      label: Existing standard/system to reuse or check
+      description: Optional. If the proposal touches service data, council/provider systems or interoperability, identify anything SafeBed should reuse/integrate with rather than recreate.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: mission
+    attributes:
+      label: Mission and public-data confirmation
+      options:
+        - label: This proposal does not introduce referral/placement commission, paid ranking or sale/commercial exploitation of service-user data.
+          required: true
+        - label: I confirm the issue contains no real personal/referral data, protected location, credential, private provider information or other confidential material.
+          required: true
