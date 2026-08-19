@@ -2,7 +2,7 @@
 
 **Status:** discovery specification; not production-ready.
 
-The SafeBed Availability Protocol (SAP) is an Open Referral UK / HSDS-compatible emergency-accommodation profile and transactional layer. It is intended to connect existing provider and council systems, not replace them.
+The SafeBed Availability Protocol (SAP) is an Open Referral UK / HSDS-aligned emergency-accommodation profile and transactional layer. It is intended to connect existing provider and council systems, not replace them.
 
 ## 1. Core transaction
 
@@ -14,16 +14,24 @@ Not every provider supports every stage. The provider remains authoritative for 
 
 ## 2. Standards foundation
 
-Open Referral UK 3.0 is aligned with the international Human Services Data Specification (HSDS). SafeBed should reuse existing HSDS structures for organisations, services, locations, schedules, eligibility, accessibility and service capacity.
+The current UK profile is **Open Referral UK (ORUK) 3.0**. It provides the present UK interoperability baseline for service-directory concepts such as organisations, services, service locations, schedules and related service information.
 
-HSDS `service_capacity` already supports values such as:
+International **HSDS 3.1** subsequently introduced `service_capacity` and `unit`. `service_capacity` supports:
 
 - available capacity;
 - maximum capacity;
-- last update time;
-- a human-readable description of the capacity represented.
+- an update timestamp;
+- a human-readable description of the capacity represented;
+- a unit describing what is being counted.
 
-SafeBed therefore does **not** define a competing service directory or bed-count standard. It adds placement semantics that a general service directory does not need.
+The published ORUK 3.0 profile does **not currently include `service_capacity`**. SafeBed should therefore:
+
+1. reuse ORUK 3.0-compatible structures for current UK service discovery;
+2. align its capacity representation with the HSDS 3.1+ `service_capacity` model where practical;
+3. document SafeBed-only placement transactions separately rather than implying they are part of ORUK;
+4. participate in standards/profile discussion before proposing any SafeBed-specific extension for wider adoption.
+
+SafeBed therefore does **not** define a competing service directory. Its additional concern is trustworthy, time-sensitive emergency-accommodation availability plus placement transactions that a general directory does not currently standardise in the UK profile.
 
 ## 3. Provider source of truth
 
@@ -80,6 +88,8 @@ Examples include:
 - `EMERGENCY_SPACE`
 
 Adapters may translate richer provider-specific inventory into these interoperable units without forcing the provider to change its internal model.
+
+Where a SafeBed capacity can be represented cleanly by the HSDS 3.1+ `unit` and `service_capacity` structures, that mapping should be preferred over inventing an incompatible shape.
 
 ## 7. PlacementNeed
 
@@ -232,7 +242,7 @@ Proposed capability-oriented endpoints:
 - `POST /v1/reservations`
 - `POST /v1/placements/{id}/arrival`
 
-An OpenAPI contract will define exact representations separately.
+These are SafeBed discovery endpoints, not claims about the current ORUK API. An OpenAPI contract defines their provisional representations separately.
 
 ## 17. Integration classes
 
@@ -248,7 +258,7 @@ A small provider without an API should still be able to participate safely.
 
 ## 18. Webhook event families
 
-Candidate events:
+Candidate SafeBed events:
 
 - `capacity.changed`
 - `referral.created`
@@ -308,6 +318,8 @@ Before live personal data is processed, SafeBed should prove with synthetic pers
 
 ## References
 
-- Open Referral UK: https://openreferraluk.org/
+- Open Referral UK current profile/API: https://openreferraluk.org/developers/api
 - ORUK technical overview: https://openreferraluk.org/developers/overview
+- ORUK changelog: https://openreferraluk.org/developers/changelog
 - HSDS schema reference: https://docs.openreferral.org/en/latest/hsds/schema_reference.html
+- HSDS changelog: https://docs.openreferral.org/en/latest/hsds/changelog.html
