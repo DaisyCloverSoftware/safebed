@@ -25,7 +25,7 @@ test("manual-confirmation availability requires confirmation rather than a place
   assert.equal(nextAction(service, "VERIFIED_PROFESSIONAL").code, "CALL_TO_CONFIRM");
 });
 
-test("restricted specialist service is discoverable to public flow without an exact destination", () => {
+test("restricted specialist service remains a public referral pathway without an exact destination", () => {
   const service = byId("restricted");
   assert.ok(service);
   assert.equal(service.disclosure, "RESTRICTED");
@@ -33,6 +33,16 @@ test("restricted specialist service is discoverable to public flow without an ex
   assert.equal(service.map.kind, "region");
   assert.equal(nextAction(service, "PUBLIC").code, "GET_PROFESSIONAL_HELP");
   assert.equal(visibleDestination(service, "VERIFIED_PROFESSIONAL", "CONFIRMED"), null);
+
+  const results = searchSyntheticServices({
+    wheelchairAccessRequired: false,
+    hasPet: false,
+    professionalReferralAvailable: false,
+  });
+  const restricted = results.find(({ service: candidate }) => candidate.id === "restricted");
+  assert.ok(restricted);
+  assert.equal(restricted.match.state, "POSSIBLY_SUITABLE");
+  assert.deepEqual(restricted.match.reasons, ["A verified professional referral is required"]);
 });
 
 test("confirmed public synthetic placement can expose its synthetic destination after the correct state", () => {
@@ -51,4 +61,5 @@ test("a search with incompatible accessibility and pet requirements can produce 
     professionalReferralAvailable: true,
   });
   assert.equal(results.filter(({ match }) => match.state === "SUITABLE").length, 0);
+  assert.equal(results.filter(({ match }) => match.state === "POSSIBLY_SUITABLE").length, 0);
 });
