@@ -34,6 +34,7 @@ The first technical target is intentionally narrow:
 ## Discovery documents
 
 - [SafeBed Availability Protocol v0.1](docs/safebed-availability-protocol-v0.1.md)
+- [ORUK / HSDS Standards Mapping v0.1](docs/standards-mapping-v0.1.md)
 - [Provider Discovery & Interview Pack v0.1](docs/provider-discovery-interview-pack-v0.1.md)
 - [Emergency Accommodation Interoperability Pilot v0.1](docs/pilot-proposition-v0.1.md)
 - [Security, Privacy & Safeguarding Model v0.1](docs/security-privacy-safeguarding-model-v0.1.md)
