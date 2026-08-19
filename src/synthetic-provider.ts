@@ -2,6 +2,7 @@ import type {
   CapacitySnapshot,
   Hold,
   ProviderAdapter,
+  ProviderCapabilities,
   ProviderDestination,
   PublicService,
   Referral,
@@ -22,6 +23,13 @@ export class ProviderUnavailableError extends Error {
   }
 }
 
+export class UnsupportedProviderCapabilityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnsupportedProviderCapabilityError";
+  }
+}
+
 export class InvalidProviderTransitionError extends Error {
   constructor(message: string) {
     super(message);
@@ -29,7 +37,7 @@ export class InvalidProviderTransitionError extends Error {
   }
 }
 
-interface SyntheticServiceConfig {
+export interface SyntheticServiceConfig {
   readonly service: PublicService;
   readonly availableUnits: number;
   readonly maximumUnits: number;
@@ -58,6 +66,7 @@ interface MutableReservation extends Reservation {
 
 export class SyntheticProviderAdapter implements ProviderAdapter {
   readonly providerId: string;
+  readonly capabilities: ProviderCapabilities;
   #services = new Map<string, PublicService>();
   #capacities = new Map<string, MutableCapacity>();
   #destinations = new Map<string, ProviderDestination>();
@@ -68,8 +77,18 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
   #reservationByIdempotencyKey = new Map<string, string>();
   #online = true;
 
-  constructor(providerId: string, services: readonly SyntheticServiceConfig[]) {
+  constructor(
+    providerId: string,
+    services: readonly SyntheticServiceConfig[],
+    capabilities: ProviderCapabilities = {
+      integrationMode: "LIVE_API",
+      referralMode: "SAFEBED_TRANSACTION",
+      holdSupported: true,
+      reservationMode: "SAFEBED_TRANSACTION",
+    },
+  ) {
     this.providerId = providerId;
+    this.capabilities = capabilities;
     for (const config of services) {
       if (config.service.providerId !== providerId) {
         throw new Error("Synthetic service providerId must match adapter providerId.");
@@ -112,6 +131,9 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
 
   async submitReferral(serviceId: string, now: Date): Promise<Referral> {
     this.#assertOnline();
+    if (this.capabilities.referralMode === "EXTERNAL_MANUAL") {
+      throw new UnsupportedProviderCapabilityError("This provider requires an external/manual referral workflow.");
+    }
     this.#service(serviceId);
     const timestamp = now.toISOString();
     const referral: Referral = {
@@ -127,6 +149,9 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
 
   async acceptReferral(referralId: string, now: Date): Promise<Referral> {
     this.#assertOnline();
+    if (this.capabilities.referralMode === "EXTERNAL_MANUAL") {
+      throw new UnsupportedProviderCapabilityError("This provider does not accept SafeBed referral transactions.");
+    }
     const existing = this.#referral(referralId);
     if (existing.status !== "SUBMITTED" && existing.status !== "UNDER_REVIEW") {
       throw new InvalidProviderTransitionError(`Cannot accept referral in state ${existing.status}.`);
@@ -145,6 +170,9 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     now: Date;
   }): Promise<Hold> {
     this.#assertOnline();
+    if (!this.capabilities.holdSupported) {
+      throw new UnsupportedProviderCapabilityError("This provider does not support SafeBed holds.");
+    }
     this.#expireHolds(input.now);
 
     const existingHoldId = this.#holdByIdempotencyKey.get(input.idempotencyKey);
@@ -202,6 +230,9 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     canDiscloseDestination: boolean;
   }): Promise<Reservation> {
     this.#assertOnline();
+    if (this.capabilities.reservationMode === "EXTERNAL_MANUAL") {
+      throw new UnsupportedProviderCapabilityError("This provider requires an external/manual reservation workflow.");
+    }
     this.#expireHolds(input.now);
 
     const existingReservationId = this.#reservationByIdempotencyKey.get(input.idempotencyKey);
