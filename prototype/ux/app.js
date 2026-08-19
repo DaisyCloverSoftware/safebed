@@ -45,8 +45,8 @@ function announce(message) {
 
 function showView(target) {
   for (const view of views) view.hidden = view !== target;
-  target.focus?.();
   window.scrollTo({ top: 0, behavior: "instant" });
+  target.querySelector("h1")?.focus();
 }
 
 function policyRole() {
@@ -72,13 +72,13 @@ function statusClass(service) {
 
 function renderResults() {
   const matches = searchSyntheticServices(state.need);
-  const suitable = matches.filter(({ match }) => match.state === "SUITABLE");
-  const confirmed = suitable.filter(({ service }) => ["AVAILABLE", "LIMITED"].includes(service.availability.state));
+  const potential = matches.filter(({ match }) => match.state === "SUITABLE" || match.state === "POSSIBLY_SUITABLE");
+  const confirmed = potential.filter(({ service }) => ["AVAILABLE", "LIMITED"].includes(service.availability.state));
 
   resultsContext.textContent = `${routeLabels[state.route]} · ${state.need.location}`;
   resultsSummary.textContent = state.offline
     ? "Service information is visible, but live capacity is deliberately treated as unconfirmed while offline."
-    : `${confirmed.length} synthetic option${confirmed.length === 1 ? "" : "s"} currently has confirmed capacity and matches the information entered.`;
+    : `${confirmed.length} synthetic option${confirmed.length === 1 ? "" : "s"} currently has confirmed capacity and is suitable or potentially suitable for the information entered.`;
 
   resultsList.replaceChildren();
 
@@ -89,8 +89,13 @@ function renderResults() {
     const distance = service.distanceMiles == null ? "Location protected" : `${service.distanceMiles.toFixed(1)} miles away`;
     const statusText = state.offline ? "Availability cannot be confirmed while offline" : availabilityLabel(service);
     const action = nextAction(service, policyRole());
-    const matched = match.state === "SUITABLE";
-    const actionDisabled = state.offline || !matched;
+    const actionable = match.state === "SUITABLE" || match.state === "POSSIBLY_SUITABLE";
+    const actionDisabled = state.offline || !actionable;
+    const matchMessage = match.state === "POSSIBLY_SUITABLE"
+      ? `<div class="match-warning"><strong>Potential pathway — another step is required.</strong><ul>${match.reasons.map((reason) => `<li>${reason}</li>`).join("")}</ul></div>`
+      : match.state === "NOT_MATCHED"
+        ? `<div class="match-warning"><strong>This does not currently match.</strong><ul>${match.reasons.map((reason) => `<li>${reason}</li>`).join("")}</ul></div>`
+        : "";
 
     card.innerHTML = `
       <p class="eyebrow">${service.disclosure === "RESTRICTED" ? "Protected service" : "Synthetic accommodation"}</p>
@@ -101,10 +106,10 @@ function renderResults() {
         <span>Check-in: ${service.checkIn}</span>
       </div>
       <p class="status-line ${statusClass(service)}">${statusText}</p>
-      ${matched ? "" : `<div class="match-warning"><strong>This does not currently match.</strong><ul>${match.reasons.map((reason) => `<li>${reason}</li>`).join("")}</ul></div>`}
+      ${matchMessage}
       <p class="capability-note">${actionNote(service)}</p>
       <div class="result-footer">
-        ${matched ? `<button class="result-action" type="button" data-service="${service.id}" data-action="${action.code}" ${actionDisabled ? "disabled" : ""}>${state.offline ? "Live action unavailable" : action.label}</button>` : ""}
+        ${actionable ? `<button class="result-action" type="button" data-service="${service.id}" data-action="${action.code}" ${actionDisabled ? "disabled" : ""}>${state.offline ? "Live action unavailable" : action.label}</button>` : ""}
       </div>
     `;
     resultsList.append(card);
@@ -117,7 +122,7 @@ function renderResults() {
 function renderMap(matches) {
   mapElement.replaceChildren();
   for (const { service, match } of matches) {
-    if (match.state !== "SUITABLE") continue;
+    if (match.state !== "SUITABLE" && match.state !== "POSSIBLY_SUITABLE") continue;
 
     const marker = document.createElement("span");
     marker.style.setProperty("--x", service.map.x);
@@ -139,7 +144,7 @@ function renderMap(matches) {
   }
 }
 
-function setResultTab(tab) {
+function setResultTab(tab, moveFocus = false) {
   const listTab = document.querySelector("#list-tab");
   const mapTab = document.querySelector("#map-tab");
   const listPanel = document.querySelector("#list-panel");
@@ -147,8 +152,11 @@ function setResultTab(tab) {
   const listSelected = tab === "list";
   listTab.setAttribute("aria-selected", String(listSelected));
   mapTab.setAttribute("aria-selected", String(!listSelected));
+  listTab.tabIndex = listSelected ? 0 : -1;
+  mapTab.tabIndex = listSelected ? -1 : 0;
   listPanel.hidden = !listSelected;
   mapPanel.hidden = listSelected;
+  if (moveFocus) (listSelected ? listTab : mapTab).focus();
 }
 
 function makeDialogButton(label, handler, className = "primary") {
@@ -302,6 +310,21 @@ resultsList.addEventListener("click", (event) => {
 
 document.querySelector("#list-tab").addEventListener("click", () => setResultTab("list"));
 document.querySelector("#map-tab").addEventListener("click", () => setResultTab("map"));
+
+document.querySelector("[role=tablist]").addEventListener("keydown", (event) => {
+  if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+    event.preventDefault();
+    setResultTab(event.target.id === "list-tab" ? "map" : "list", true);
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    setResultTab("list", true);
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    setResultTab("map", true);
+  }
+});
 
 offlineToggle.addEventListener("click", () => {
   state.offline = !state.offline;
