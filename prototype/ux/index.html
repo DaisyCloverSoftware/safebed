@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>SafeBed synthetic UX prototype</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Synthetic prototype</p>
+      <p class="brand" aria-label="SafeBed">SafeBed</p>
+    </div>
+    <p class="header-note">No real services, people or locations are shown.</p>
+  </header>
+
+  <main id="main" class="shell" tabindex="-1">
+    <div id="announcement" class="sr-only" aria-live="polite"></div>
+
+    <section id="start-view" class="view" aria-labelledby="start-title">
+      <div class="hero">
+        <p class="eyebrow">Find somewhere safe tonight</p>
+        <h1 id="start-title">What do you need to do?</h1>
+        <p>Choose the route that best matches the situation. Basic discovery does not require an account in this prototype.</p>
+      </div>
+
+      <div class="role-grid">
+        <button class="role-card" type="button" data-role="PERSON">
+          <strong>I need somewhere safe</strong>
+          <span>Search nearby options for tonight.</span>
+        </button>
+        <button class="role-card" type="button" data-role="SUPPORTER">
+          <strong>I’m helping someone</strong>
+          <span>Search public-safe information and referral routes.</span>
+        </button>
+        <button class="role-card" type="button" data-role="PROFESSIONAL">
+          <strong>I’m a support professional</strong>
+          <span>Demonstrate verified referral and hold workflows.</span>
+        </button>
+        <button class="role-card" type="button" data-role="PROVIDER">
+          <strong>I provide accommodation</strong>
+          <span>Demonstrate capacity and referral management.</span>
+        </button>
+      </div>
+
+      <aside class="safety-note" aria-label="Prototype safety note">
+        <strong>Prototype boundary</strong>
+        <p>This is a fictional interaction model. It must not be used to find real accommodation or submit real information.</p>
+      </aside>
+    </section>
+
+    <section id="search-view" class="view" hidden aria-labelledby="search-title">
+      <button class="text-button" type="button" data-back>← Change route</button>
+      <p id="role-context" class="eyebrow"></p>
+      <h1 id="search-title">Find somewhere safe tonight</h1>
+      <p>Only answer what is needed to narrow the synthetic options.</p>
+
+      <form id="search-form" class="search-form">
+        <label>
+          Town or postcode
+          <input name="location" value="Exampletown" autocomplete="off" required>
+        </label>
+
+        <fieldset>
+          <legend>What needs to be accommodated?</legend>
+          <label class="check-row"><input type="checkbox" name="wheelchair"> Wheelchair-accessible accommodation is required</label>
+          <label class="check-row"><input type="checkbox" name="pet"> A pet needs to stay too</label>
+        </fieldset>
+
+        <button class="primary" type="submit">Find options</button>
+      </form>
+    </section>
+
+    <section id="results-view" class="view" hidden aria-labelledby="results-title">
+      <button class="text-button" type="button" data-back-to-search>← Change search</button>
+      <p id="results-context" class="eyebrow"></p>
+      <h1 id="results-title">Options for tonight</h1>
+      <p id="results-summary"></p>
+
+      <div class="toolbar" aria-label="Results controls">
+        <div class="segmented" role="tablist" aria-label="Result view">
+          <button id="list-tab" role="tab" aria-selected="true" aria-controls="list-panel" type="button">List</button>
+          <button id="map-tab" role="tab" aria-selected="false" aria-controls="map-panel" type="button">Map</button>
+        </div>
+        <button id="offline-toggle" class="secondary" type="button">Simulate connection lost</button>
+      </div>
+
+      <div id="offline-banner" class="warning" hidden role="status">
+        <strong>Live availability cannot be confirmed while offline.</strong>
+        <p>Cached service information may still be useful, but do not travel based on a previous capacity count.</p>
+      </div>
+
+      <section id="list-panel" role="tabpanel" aria-labelledby="list-tab">
+        <div id="results-list" class="results-list"></div>
+        <div id="no-placement" class="no-placement" hidden>
+          <h2>No confirmed suitable place found in this synthetic search</h2>
+          <p>SafeBed must not stop at “0 results”. A real service would show appropriate council, outreach or specialist routes here.</p>
+          <button class="secondary" type="button" data-back-to-search>Change search</button>
+        </div>
+      </section>
+
+      <section id="map-panel" role="tabpanel" aria-labelledby="map-tab" hidden>
+        <p class="map-explainer">This schematic map is not geographic. Protected specialist accommodation is represented only as a coarse area.</p>
+        <div id="synthetic-map" class="map" aria-hidden="true"></div>
+        <p class="assistive-note">The list contains the complete accessible result information. The map is supplementary.</p>
+      </section>
+    </section>
+
+    <section id="provider-view" class="view" hidden aria-labelledby="provider-title">
+      <button class="text-button" type="button" data-back>← Change route</button>
+      <p class="eyebrow">Provider demonstration</p>
+      <h1 id="provider-title">Tonight’s synthetic capacity</h1>
+
+      <div class="provider-grid">
+        <section class="panel" aria-labelledby="capacity-title">
+          <h2 id="capacity-title">Usable spaces tonight</h2>
+          <div class="capacity-control">
+            <button id="capacity-minus" type="button" aria-label="Decrease available spaces">−</button>
+            <output id="capacity-output" aria-live="polite">3</output>
+            <button id="capacity-plus" type="button" aria-label="Increase available spaces">+</button>
+          </div>
+          <p id="capacity-freshness">Confirmed just now</p>
+          <button id="confirm-capacity" class="secondary" type="button">Confirm current availability</button>
+        </section>
+
+        <section class="panel" aria-labelledby="referral-title">
+          <h2 id="referral-title">Synthetic referral awaiting review</h2>
+          <dl class="facts">
+            <div><dt>Household</dt><dd>1 adult</dd></div>
+            <div><dt>Accessibility</dt><dd>Step-free access required</dd></div>
+            <div><dt>Referral source</dt><dd>Verified professional demo</dd></div>
+          </dl>
+          <div class="button-row">
+            <button id="accept-referral" class="primary" type="button">Accept demo referral</button>
+            <button id="decline-referral" class="secondary" type="button">Decline</button>
+          </div>
+          <p id="provider-referral-status" aria-live="polite">No decision recorded.</p>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="action-dialog" aria-labelledby="dialog-title">
+    <form method="dialog" class="dialog-card">
+      <button class="dialog-close" value="close" aria-label="Close">×</button>
+      <p class="eyebrow">Synthetic workflow</p>
+      <h2 id="dialog-title">Next step</h2>
+      <div id="dialog-content"></div>
+      <div id="dialog-actions" class="button-row"></div>
+    </form>
+  </dialog>
+
+  <footer>
+    <p>SafeBed synthetic UX prototype — fictional data only.</p>
+  </footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
