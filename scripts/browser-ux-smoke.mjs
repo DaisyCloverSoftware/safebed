@@ -67,10 +67,11 @@ async function startStaticServer() {
 async function startChrome() {
   const chromePath = findChrome();
   const profileDir = await mkdtemp(join(tmpdir(), "safebed-chrome-"));
+  const port = 9222;
   const args = [
     "--headless=new",
     "--remote-debugging-address=127.0.0.1",
-    "--remote-debugging-port=0",
+    `--remote-debugging-port=${port}`,
     `--user-data-dir=${profileDir}`,
     "--no-first-run",
     "--no-default-browser-check",
@@ -88,31 +89,36 @@ async function startChrome() {
     stdio: ["ignore", "ignore", "pipe"],
   });
 
-  const debuggerUrl = await new Promise((resolvePromise, reject) => {
-    const timer = setTimeout(() => reject(new Error("Timed out waiting for Chrome DevTools endpoint.")), 15_000);
-    let stderr = "";
+  let stderr = "";
+  let exitCode = null;
+  let spawnError = null;
+  chrome.stderr.setEncoding("utf8");
+  chrome.stderr.on("data", (chunk) => { stderr += chunk; });
+  chrome.once("exit", (code) => { exitCode = code; });
+  chrome.once("error", (error) => { spawnError = error; });
 
-    chrome.stderr.setEncoding("utf8");
-    chrome.stderr.on("data", (chunk) => {
-      stderr += chunk;
-      const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-      if (match) {
-        clearTimeout(timer);
-        resolvePromise(match[1]);
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    if (spawnError) throw spawnError;
+    if (exitCode !== null) {
+      throw new Error(`Chrome exited before DevTools was ready (code ${exitCode}).\n${stderr}`);
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+        signal: AbortSignal.timeout(1_000),
+      });
+      if (response.ok) {
+        const version = await response.json();
+        if (version.webSocketDebuggerUrl) return { chrome, profileDir, port, chromePath };
       }
-    });
-    chrome.once("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Chrome exited before DevTools was ready (code ${code}).\n${stderr}`));
-    });
-    chrome.once("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
+    } catch {
+      // Chrome is still starting; retry within the bounded deadline.
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
 
-  const port = new URL(debuggerUrl).port;
-  return { chrome, profileDir, port, chromePath };
+  throw new Error(`Timed out waiting for Chrome DevTools endpoint.\n${stderr}`);
 }
 
 class CdpClient {
