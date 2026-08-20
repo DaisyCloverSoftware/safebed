@@ -6,6 +6,7 @@ on:
       - "prototype/authorisation/**"
       - "scripts/authorisation-policy.test.mjs"
       - "scripts/placement-transaction-authorisation.test.mjs"
+      - "scripts/reservation-replay-authorisation.test.mjs"
       - "docs/identity-and-authorisation-model-v0.1.md"
       - "docs/templates/authorisation-test-matrix-v0.1.md"
       - ".github/workflows/authorisation-policy.yml"
@@ -40,3 +41,6 @@ jobs:
 
       - name: Run placement transaction authorisation policy contract
         run: node scripts/placement-transaction-authorisation.test.mjs
+
+      - name: Run provider-proven reservation replay authorisation contract
+        run: node scripts/reservation-replay-authorisation.test.mjs
