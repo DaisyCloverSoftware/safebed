@@ -7,6 +7,13 @@ import {
 } from "../../src/synthetic-fixtures.ts";
 
 const MAX_JSON_BODY_BYTES = 16 * 1024;
+const MAX_SERVICE_ID_LENGTH = 200;
+const REQUEST_TIMEOUT_MS = 10_000;
+const HEADERS_TIMEOUT_MS = 5_000;
+const KEEP_ALIVE_TIMEOUT_MS = 5_000;
+const MAX_HEADERS_COUNT = 64;
+const MAX_REQUESTS_PER_SOCKET = 100;
+
 const PLACEMENT_NEED_FIELDS = new Set([
   "requiredFor",
   "householdSize",
@@ -24,23 +31,55 @@ function responseHeaders() {
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer",
     "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+    "cross-origin-resource-policy": "same-origin",
+    "x-frame-options": "DENY",
+    "permissions-policy": "geolocation=(), camera=(), microphone=(), payment=(), usb=()",
   };
 }
 
-function sendJson(response, status, value) {
+function sendJson(response, status, value, extraHeaders = {}) {
   const body = `${JSON.stringify(value)}\n`;
   response.writeHead(status, {
     ...responseHeaders(),
+    ...extraHeaders,
     "content-length": Buffer.byteLength(body),
   });
   response.end(body);
 }
 
-function problem(response, status, code, message) {
-  sendJson(response, status, { code, message });
+function problem(response, status, code, message, extraHeaders = {}) {
+  sendJson(response, status, { code, message }, extraHeaders);
+}
+
+function methodNotAllowed(response, allow) {
+  problem(
+    response,
+    405,
+    "VALIDATION_FAILED",
+    "HTTP method not allowed for this public discovery operation.",
+    { allow },
+  );
+}
+
+function isJsonMediaType(value) {
+  if (typeof value !== "string") return false;
+  const mediaType = value.split(";", 1)[0].trim().toLowerCase();
+  return mediaType === "application/json"
+    || (mediaType.startsWith("application/") && mediaType.endsWith("+json"));
+}
+
+function hasOversizedDeclaredBody(request) {
+  const raw = request.headers["content-length"];
+  if (raw === undefined) return false;
+  const value = Number(raw);
+  return !Number.isSafeInteger(value) || value < 0 || value > MAX_JSON_BODY_BYTES;
 }
 
 async function readJson(request) {
+  if (hasOversizedDeclaredBody(request)) {
+    throw new Error("REQUEST_TOO_LARGE");
+  }
+
   const chunks = [];
   let size = 0;
 
@@ -122,6 +161,10 @@ function publicServices(sandbox, area) {
   );
 }
 
+function hasOnlyAreaQuery(url) {
+  return [...url.searchParams.keys()].every((key) => key === "area");
+}
+
 export function createSyntheticDiscoveryApi({ now = SYNTHETIC_PROFILE_NOW } = {}) {
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
     throw new TypeError("Synthetic discovery API requires a valid fixed Date.");
@@ -129,13 +172,22 @@ export function createSyntheticDiscoveryApi({ now = SYNTHETIC_PROFILE_NOW } = {}
 
   const sandbox = new SafeBedSandbox(createSyntheticProviderProfiles());
 
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://synthetic.invalid");
 
-      if (request.method === "GET" && url.pathname === "/v1/services/search") {
+      if (url.pathname === "/v1/services/search") {
+        if (request.method !== "GET") {
+          methodNotAllowed(response, "GET");
+          return;
+        }
+
         const areas = url.searchParams.getAll("area");
-        if (areas.length > 1 || (areas[0]?.length ?? 0) > 200) {
+        if (
+          !hasOnlyAreaQuery(url)
+          || areas.length > 1
+          || (areas[0]?.length ?? 0) > 200
+        ) {
           problem(response, 400, "VALIDATION_FAILED", "Invalid public-safe area query.");
           return;
         }
@@ -144,7 +196,17 @@ export function createSyntheticDiscoveryApi({ now = SYNTHETIC_PROFILE_NOW } = {}
         return;
       }
 
-      if (request.method === "POST" && url.pathname === "/v1/matches") {
+      if (url.pathname === "/v1/matches") {
+        if (request.method !== "POST") {
+          methodNotAllowed(response, "POST");
+          return;
+        }
+
+        if (!isJsonMediaType(request.headers["content-type"])) {
+          problem(response, 400, "VALIDATION_FAILED", "A JSON request media type is required.");
+          return;
+        }
+
         let input;
         try {
           input = await readJson(request);
@@ -163,33 +225,51 @@ export function createSyntheticDiscoveryApi({ now = SYNTHETIC_PROFILE_NOW } = {}
         return;
       }
 
-      if (request.method === "GET") {
-        const match = /^\/v1\/services\/([^/]+)\/availability$/.exec(url.pathname);
-        if (match) {
-          let serviceId;
-          try {
-            serviceId = decodeURIComponent(match[1]);
-          } catch {
+      const availabilityMatch = /^\/v1\/services\/([^/]+)\/availability$/.exec(url.pathname);
+      if (availabilityMatch) {
+        if (request.method !== "GET") {
+          methodNotAllowed(response, "GET");
+          return;
+        }
+
+        let serviceId;
+        try {
+          serviceId = decodeURIComponent(availabilityMatch[1]);
+        } catch {
+          problem(response, 404, "NOT_FOUND", "Resource not found or intentionally not disclosed.");
+          return;
+        }
+
+        if (serviceId.length < 1 || serviceId.length > MAX_SERVICE_ID_LENGTH) {
+          problem(response, 404, "NOT_FOUND", "Resource not found or intentionally not disclosed.");
+          return;
+        }
+
+        try {
+          sendJson(response, 200, await sandbox.getAvailability(serviceId, now));
+        } catch (error) {
+          if (error instanceof Error && error.message.startsWith("Unknown service:")) {
             problem(response, 404, "NOT_FOUND", "Resource not found or intentionally not disclosed.");
             return;
           }
-
-          try {
-            sendJson(response, 200, await sandbox.getAvailability(serviceId, now));
-          } catch (error) {
-            if (error instanceof Error && error.message.startsWith("Unknown service:")) {
-              problem(response, 404, "NOT_FOUND", "Resource not found or intentionally not disclosed.");
-              return;
-            }
-            throw error;
-          }
-          return;
+          throw error;
         }
+        return;
       }
 
+      // Transaction routes intentionally fall through here. Do not advertise
+      // methods or auth semantics for privileged endpoints not yet exposed.
       problem(response, 404, "NOT_FOUND", "Resource not found or intentionally not disclosed.");
     } catch {
       problem(response, 500, "PROVIDER_UNAVAILABLE", "Synthetic discovery service could not complete the request.");
     }
   });
+
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
+  server.headersTimeout = HEADERS_TIMEOUT_MS;
+  server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS;
+  server.maxHeadersCount = MAX_HEADERS_COUNT;
+  server.maxRequestsPerSocket = MAX_REQUESTS_PER_SOCKET;
+
+  return server;
 }
