@@ -8,9 +8,9 @@ import { Action, Decision, authorise } from "./policy.mjs";
  * idempotent reservation replay after the original hold has already been
  * consumed.
  *
- * `resource.idempotentReplay` is trusted only as server-authoritative resource
- * state. Request/browser supplied values belong in context.clientSupplied and
- * are intentionally ignored by this policy contract.
+ * `resource.idempotentReplay` and reservation state are trusted only as
+ * server-authoritative resource state. Request/browser supplied values belong
+ * in context.clientSupplied and are intentionally ignored by this contract.
  */
 export function authorisePlacementTransaction(input) {
   const base = authorise(input);
@@ -24,13 +24,16 @@ export function authorisePlacementTransaction(input) {
   }
 
   const resource = input?.resource ?? {};
-  const replayIsConfirmed =
+  const existingReservation =
+    resource.reservationState === "CONFIRMED"
+    || resource.reservationState === "ARRIVED";
+  const replayIsProviderProven =
     resource.idempotentReplay === true
     && resource.referralState === "ACCEPTED"
     && resource.providerDecision === "ACCEPTED"
-    && resource.reservationState === "CONFIRMED";
+    && existingReservation;
 
-  if (!replayIsConfirmed) return base;
+  if (!replayIsProviderProven) return base;
 
   return Object.freeze({
     decision: Decision.ALLOW,
