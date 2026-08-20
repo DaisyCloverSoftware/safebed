@@ -1,6 +1,6 @@
 # SafeBed ORUK / HSDS Standards Claim Register v0.1
 
-**Status:** public discovery register. Claims below are internal SafeBed interpretations of public standards documentation and remain subject to external review by the relevant standards community.
+**Status:** public discovery register. Claims below are SafeBed interpretations of public standards documentation and remain subject to external review by the relevant standards community.
 
 This register exists to prevent standards language from quietly drifting into stronger claims than SafeBed can support.
 
@@ -15,11 +15,13 @@ This register exists to prevent standards language from quietly drifting into st
 
 SafeBed's current UK service-data baseline is **Open Referral UK (ORUK) 3.0**.
 
-SafeBed also refers to later international **Human Services Data Specification (HSDS)** concepts where they address a relevant need that the current published ORUK 3.0 profile does not expose.
+As checked on 20 August 2026, ORUK's own developer material still presents **3.0 as the current/latest UK profile**. The international Human Services Data Specification has continued independently and is now on the **3.2.x line (3.2.3 current in the upstream specification repository/changelog at this review point)**.
 
-The most important current example is capacity: international HSDS 3.1 introduced `service_capacity` and `unit` concepts, while the current published ORUK 3.0 profile does not expose `service_capacity` as part of its UK API/profile.
+International HSDS **3.1 introduced** `service_capacity`, `unit`, and the `service.capacities` relationship. Those concepts remain present in the current 3.2.x international schema. The current published ORUK 3.0 API/profile does not expose `service_capacity` as a UK-profile entity/endpoint.
 
-SafeBed must therefore never write as though its capacity/placement layer is already a standard ORUK 3.0 endpoint.
+SafeBed must therefore never write as though its capacity/placement layer is already a standard ORUK 3.0 endpoint. When version precision matters, the preferred wording is:
+
+> **ORUK 3.0-compatible service discovery; capacity semantics based on HSDS concepts introduced in 3.1 and retained in the current international 3.2.x line; SafeBed-specific transaction/disclosure behaviour where explicitly identified.**
 
 ---
 
@@ -38,8 +40,9 @@ SafeBed must therefore never write as though its capacity/placement layer is alr
 - https://openreferraluk.org/developers/overview
 - https://openreferraluk.org/developers/api
 - https://openreferraluk.org/developers/changelog
+- https://openreferraluk.org/about/50-governance
 
-**External review question:** Is ORUK 3.0 still the correct profile/version for a new UK implementation beginning discovery now, and is there a newer profile transition SafeBed should plan for?
+**External review question:** Is ORUK 3.0 still the correct profile/version for a new UK implementation beginning discovery now, and is there a newer UK profile transition SafeBed should plan for?
 
 ---
 
@@ -63,24 +66,26 @@ SafeBed must therefore never write as though its capacity/placement layer is alr
 
 ---
 
-## STD-003 — International HSDS 3.1 added capacity concepts
+## STD-003 — HSDS 3.1 introduced capacity; the current international line is newer
 
-**Claim:** International HSDS 3.1 introduced `service_capacity` and `unit` concepts suitable for describing available/maximum service capacity and its update time/unit.
+**Claim:** International HSDS 3.1 introduced `service_capacity` and `unit` concepts suitable for describing available/maximum service capacity and its update time/unit. Those concepts remain in the current 3.2.x international schema; the upstream changelog currently records 3.2.3.
 
 **Status:** `PUBLIC_DOC_VERIFIED` + `EXTERNAL_REVIEW_REQUIRED`
 
-**SafeBed consequence:** SafeBed should align accommodation capacity semantics with the later HSDS model where practical rather than invent a structurally incompatible count.
+**SafeBed consequence:** SafeBed should align accommodation capacity semantics with the current international HSDS capacity model where practical rather than invent a structurally incompatible count. Documentation should say that capacity was **introduced in 3.1**, not imply 3.1 is still the latest international version.
 
 **Public sources:**
 
 - https://docs.openreferral.org/en/latest/hsds/changelog.html
 - https://docs.openreferral.org/en/latest/hsds/schema_reference.html
+- https://github.com/openreferral/specification
 
 **External review questions:**
 
-- Is alignment with HSDS 3.1+ `service_capacity` the right direction for a UK emergency-accommodation profile today?
+- Is alignment with the current international `service_capacity` model the right direction for a UK emergency-accommodation profile today?
 - Is equivalent capacity work already planned for a future ORUK profile?
 - Should SafeBed participate in upstream/profile work instead of maintaining a long-lived local extension?
+- Should SafeBed target a particular international 3.2.x point version for conformance testing, or treat the model as guidance until a UK profile adopts it?
 
 ---
 
@@ -93,7 +98,7 @@ SafeBed must therefore never write as though its capacity/placement layer is alr
 **SafeBed consequence:** public documentation uses language such as:
 
 - **ORUK 3.0-compatible service discovery**;
-- **HSDS 3.1+-aligned capacity semantics**;
+- **capacity semantics based on HSDS `service_capacity` / `unit`, introduced in 3.1 and retained in current international 3.2.x**;
 - **SafeBed placement transaction/disclosure layer**.
 
 It does not call the SafeBed capacity endpoint an ORUK endpoint.
@@ -104,7 +109,7 @@ It does not call the SafeBed capacity endpoint an ORUK endpoint.
 - https://openreferraluk.org/developers/schemata
 - https://docs.openreferral.org/en/latest/hsds/changelog.html
 
-**External review question:** Is this version boundary described accurately enough for implementers?
+**External review question:** Is this UK-profile/international-version boundary described accurately enough for implementers?
 
 ---
 
@@ -167,13 +172,15 @@ Current SafeBed transaction concepts include:
 
 ---
 
-## STD-008 — Protected-location disclosure is an authorisation policy, not a replacement location schema
+## STD-008 — ORUK open-feed privacy supports withholding sensitive locations; SafeBed authorisation remains application-specific
 
-**Claim:** SafeBed can reuse standard service/location information while independently deciding whether a particular caller may receive particular fields.
+**Claim:** ORUK's current data-sharing guidance says sensitive information that should not be public — explicitly including the location of a refuge — must not be exposed in an open ORUK feed. ORUK compliance guidance also distinguishes open service information from private/confidential information that may require separately secured APIs.
 
-**Status:** `INTERNAL_MAPPING`
+**Status:** `PUBLIC_DOC_VERIFIED` + `INTERNAL_MAPPING` + `EXTERNAL_REVIEW_REQUIRED`
 
-SafeBed disclosure classes currently include:
+**SafeBed consequence:** SafeBed must not solve protected-location disclosure by publishing an exact sensitive destination into an anonymous/open service feed and merely hiding it in the UI. A public SafeBed/ORUK-compatible discovery record may identify an access pathway without carrying an unauthorised exact destination.
+
+SafeBed's disclosure classes currently include:
 
 - `PUBLIC`;
 - `VERIFIED_USER`;
@@ -181,9 +188,18 @@ SafeBed disclosure classes currently include:
 - `RESTRICTED`;
 - `SEALED`.
 
-**SafeBed consequence:** disclosure policy wraps/filters standard location/service data. SafeBed is not proposing that these classes replace ORUK's location representation.
+Those classes are **SafeBed authorisation policy**, not an ORUK schema extension or a claim that ORUK defines these roles. Where an authorised workflow later needs an exact standard location object, disclosure policy may wrap/filter that standard representation rather than inventing a replacement location schema.
 
-**External review question:** Are there existing Open Referral privacy/access patterns SafeBed should align with or document alongside this application-level policy?
+**Public sources:**
+
+- https://openreferraluk.org/developers/data-sharing
+- https://openreferraluk.org/developers/compliance
+
+**External review questions:**
+
+- Is excluding the exact sensitive location from the public ORUK-compatible dataset the correct interpretation for protected emergency accommodation?
+- Are there established ORUK/Open Referral patterns for partner-only or authorised datasets that SafeBed should reuse before defining its own disclosure transport?
+- When exact location data is legitimately disclosed after authorisation, is reusing the standard location representation appropriate?
 
 ---
 
@@ -260,14 +276,15 @@ SafeBed's current standards position is internally coherent enough for synthetic
 
 The next standards milestone is an external technical review focused on:
 
-- the ORUK 3.0 baseline;
-- the HSDS 3.1+ capacity alignment;
+- the ORUK 3.0 baseline and UK profile release path;
+- capacity concepts introduced in HSDS 3.1 and retained in current international 3.2.x;
 - source/update/freshness semantics;
 - identifiers/provenance;
 - eligibility/access mapping;
+- ORUK's open-feed privacy boundary and protected/sensitive location handling;
 - whether any proposed capacity/profile concepts should move upstream;
 - which transaction concepts should remain application-specific.
 
 Until that review occurs, wording should remain:
 
-> **ORUK-compatible / HSDS-aligned / SafeBed-specific where explicitly identified.**
+> **ORUK-compatible / current-HSDS-informed / SafeBed-specific where explicitly identified.**
