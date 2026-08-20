@@ -81,6 +81,7 @@ interface ReservationIdempotencyBinding {
   readonly reservationId: string;
   readonly referralId: string;
   readonly holdId: string;
+  readonly canDiscloseDestination: boolean;
 }
 
 export class SyntheticProviderAdapter implements ProviderAdapter {
@@ -272,7 +273,8 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     if (existingBinding) {
       if (
         existingBinding.referralId !== input.referralId ||
-        existingBinding.holdId !== input.holdId
+        existingBinding.holdId !== input.holdId ||
+        existingBinding.canDiscloseDestination !== input.canDiscloseDestination
       ) {
         throw new IdempotencyConflictError();
       }
@@ -309,6 +311,7 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
       reservationId: reservation.reservationId,
       referralId: input.referralId,
       holdId: input.holdId,
+      canDiscloseDestination: input.canDiscloseDestination,
     });
     return reservation;
   }
