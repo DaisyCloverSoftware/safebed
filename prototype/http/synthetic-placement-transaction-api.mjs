@@ -292,7 +292,6 @@ export async function createSyntheticPlacementTransactionApi({
 
   const holds = new Map();
   const reservations = new Map();
-  const reservationByIdempotencyKey = new Map();
 
   const server = createServer(async (request, response) => {
     try {
@@ -418,28 +417,42 @@ export async function createSyntheticPlacementTransactionApi({
           throw error;
         }
 
-        const existingBinding = reservationByIdempotencyKey.get(input.idempotencyKey);
-        const exactReplay = existingBinding
-          && existingBinding.referralId === input.referralId
-          && existingBinding.holdId === input.holdId
-          && existingBinding.serviceId === input.serviceId;
-        const replayReservation = exactReplay
-          ? reservations.get(existingBinding.reservationId)
-          : undefined;
-
-        const decision = authorisePlacementTransaction({
+        let decision = authorisePlacementTransaction({
           principal,
           action: Action.CREATE_RESERVATION,
-          resource: holdPolicyState(fixture, provider, hold, replayReservation),
+          resource: holdPolicyState(fixture, provider, hold),
           now: now.getTime(),
         });
-        if (decision.decision !== Decision.ALLOW) {
-          policyProblem(response, decision);
-          return;
+
+        let replayReservation;
+        if (
+          decision.decision === Decision.DENY
+          && decision.reason === "reservation_requires_active_hold"
+        ) {
+          try {
+            replayReservation = provider.lookupReservationByIdempotency({
+              referralId: input.referralId,
+              holdId: input.holdId,
+              idempotencyKey: input.idempotencyKey,
+              canDiscloseDestination: false,
+            });
+          } catch (error) {
+            if (providerProblem(response, error)) return;
+            throw error;
+          }
+
+          if (replayReservation) {
+            decision = authorisePlacementTransaction({
+              principal,
+              action: Action.CREATE_RESERVATION,
+              resource: holdPolicyState(fixture, provider, hold, replayReservation),
+              now: now.getTime(),
+            });
+          }
         }
 
-        if (existingBinding && !exactReplay) {
-          problem(response, 409, "IDEMPOTENCY_CONFLICT", "The idempotency key is already bound to a different transaction.");
+        if (decision.decision !== Decision.ALLOW) {
+          policyProblem(response, decision);
           return;
         }
 
@@ -459,16 +472,8 @@ export async function createSyntheticPlacementTransactionApi({
         }
 
         reservations.set(reservation.reservationId, reservation);
-        if (!existingBinding) {
-          reservationByIdempotencyKey.set(input.idempotencyKey, Object.freeze({
-            reservationId: reservation.reservationId,
-            referralId: input.referralId,
-            holdId: input.holdId,
-            serviceId: input.serviceId,
-          }));
-        }
         await audit(auditSink, fixture, provider, principal, decision,
-          existingBinding ? "RESERVATION_REPLAYED" : "RESERVATION_CONFIRMED", {
+          replayReservation ? "RESERVATION_REPLAYED" : "RESERVATION_CONFIRMED", {
             action: Action.CREATE_RESERVATION,
             holdId: input.holdId,
             reservationId: reservation.reservationId,
