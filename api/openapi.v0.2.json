@@ -1,0 +1,633 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SafeBed Discovery API",
+    "version": "0.2.0-discovery",
+    "description": "Public, synthetic-data-first discovery contract for SafeBed emergency-accommodation interoperability. No production SafeBed API is deployed by this specification. The repository sandbox exercises the placement semantics, not an HTTP server. Open Referral UK 3.0 remains the current UK service-directory baseline; SafeBed capacity semantics are aligned toward later international HSDS capacity concepts where practical, while placement transactions and disclosure policy remain explicitly SafeBed-specific discovery concepts."
+  },
+  "tags": [
+    { "name": "Discovery" },
+    { "name": "Availability" },
+    { "name": "Referral" },
+    { "name": "Placement" }
+  ],
+  "paths": {
+    "/v1/services/search": {
+      "get": {
+        "tags": ["Discovery"],
+        "summary": "Discover public-safe service records",
+        "description": "Returns public-safe service information and provider capability metadata. This operation is contract-only in the current synthetic sandbox; geospatial search is intentionally not yet implemented. A protected exact destination must never be returned by this operation.",
+        "x-safebed-sandbox-evidence": "contract-only",
+        "parameters": [
+          {
+            "name": "area",
+            "in": "query",
+            "required": false,
+            "description": "Public-safe area/postcode/town search input. Exact geospatial semantics remain future work.",
+            "schema": { "type": "string", "maxLength": 200 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public-safe services",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ServiceDiscoveryResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/matches": {
+      "post": {
+        "tags": ["Discovery"],
+        "summary": "Match a minimised placement need against provider services",
+        "description": "Separates suitability/access-pathway reasoning from current availability. A professional referral requirement is an access/pathway reason and may produce POSSIBLY_SUITABLE rather than a hard rejection. Provider capabilities are returned independently so clients never infer bookability from a live capacity count.",
+        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PlacementNeed" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ordered synthetic/discovery match results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MatchResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/v1/services/{service_id}/availability": {
+      "get": {
+        "tags": ["Availability"],
+        "summary": "Read normalised current availability",
+        "description": "The provider/integration remains authoritative. SafeBed distinguishes source update time, observation time and freshness. STALE, UNKNOWN and MANUAL_CONFIRMATION_REQUIRED must not be presented as confirmed live capacity.",
+        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "parameters": [
+          { "$ref": "#/components/parameters/ServiceId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Normalised availability",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NormalisedAvailability" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ProviderUnavailable" }
+        }
+      }
+    },
+    "/v1/referrals": {
+      "post": {
+        "tags": ["Referral"],
+        "summary": "Create a provider referral transaction",
+        "description": "Discovery contract only. The v0.2 request deliberately contains no universal personal referral payload: real provider-specific fields remain gated by provider discovery, data minimisation and live-use governance. Authentication/organisation authority is server-derived and is not represented by a caller-supplied role field.",
+        "x-safebed-sandbox-evidence": "semantic-flow-tested-minimal",
+        "x-safebed-authz": "verified identity, organisation membership and provider policy required in production; scheme not yet deployed",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReferralRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Referral created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Referral" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/UnsupportedCapability" }
+        }
+      }
+    },
+    "/v1/referrals/{referral_id}": {
+      "get": {
+        "tags": ["Referral"],
+        "summary": "Read referral transaction status",
+        "description": "Contract shape for a future HTTP service. The current sandbox models referral state but does not expose this HTTP operation.",
+        "x-safebed-sandbox-evidence": "state-modeled-http-not-implemented",
+        "x-safebed-authz": "resource/organisation relationship required in production",
+        "parameters": [
+          { "$ref": "#/components/parameters/ReferralId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Referral state",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Referral" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/holds": {
+      "post": {
+        "tags": ["Placement"],
+        "summary": "Request a provider-authorised time-limited hold",
+        "description": "Only integrations advertising holdSupported=true may expose this action. expectedSourceRevision and idempotencyKey support conflict/retry safety. A final-space race returns an explicit conflict rather than a second confirmation.",
+        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "x-safebed-authz": "verified referral relationship and provider policy required in production",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateHoldRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Hold granted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Hold" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/CapacityConflict" },
+          "503": { "$ref": "#/components/responses/ProviderUnavailable" }
+        }
+      }
+    },
+    "/v1/holds/{hold_id}": {
+      "delete": {
+        "tags": ["Placement"],
+        "summary": "Release an active hold",
+        "description": "The adapter models hold release/expiry. This HTTP operation is not exposed by the current sandbox application shell.",
+        "x-safebed-sandbox-evidence": "adapter-modeled-http-not-implemented",
+        "x-safebed-authz": "verified relationship/provider policy required in production",
+        "parameters": [
+          { "$ref": "#/components/parameters/HoldId" }
+        ],
+        "responses": {
+          "204": { "description": "Hold released or already inactive" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/reservations": {
+      "post": {
+        "tags": ["Placement"],
+        "summary": "Confirm a provider-authorised reservation",
+        "description": "The request intentionally contains no actorRole, disclosureLevel or canDiscloseDestination input. Production authority and destination disclosure must be derived server-side from verified identity, organisation/resource relationship, provider decision, placement state and any specialist entitlement. A response may omit destination even when the reservation is confirmed.",
+        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "x-safebed-authz": "server-derived; caller-supplied privilege is prohibited",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateReservationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reservation confirmed; destination is included only when disclosure policy permits",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Reservation" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/CapacityConflict" },
+          "503": { "$ref": "#/components/responses/ProviderUnavailable" }
+        }
+      }
+    },
+    "/v1/placements/{reservation_id}/arrival": {
+      "post": {
+        "tags": ["Placement"],
+        "summary": "Record authorised arrival confirmation",
+        "description": "Arrival should normally be confirmed by the provider or an authorised worker/integration. This operation does not require or imply continuous device tracking, geofencing or location history.",
+        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "x-safebed-authz": "provider/authorised placement relationship required in production",
+        "parameters": [
+          { "$ref": "#/components/parameters/ReservationId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Placement state after arrival confirmation",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Reservation" }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/InvalidTransition" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ServiceId": {
+        "name": "service_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "ReferralId": {
+        "name": "referral_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "HoldId": {
+        "name": "hold_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "ReservationId": {
+        "name": "reservation_id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "minLength": 1 }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "Forbidden": {
+        "description": "The authenticated/public caller is not permitted to perform this action or receive this resource",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "NotFound": {
+        "description": "Resource not found or intentionally not disclosed",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "ProviderUnavailable": {
+        "description": "Authoritative provider source unavailable; clients must not reuse stale capacity as live",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "CapacityConflict": {
+        "description": "Capacity/revision conflict, including a final-space race or inactive hold",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "UnsupportedCapability": {
+        "description": "The provider integration does not support the requested SafeBed transaction",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "InvalidTransition": {
+        "description": "The transaction is not valid from the current provider/placement state",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      }
+    },
+    "schemas": {
+      "DisclosureLevel": {
+        "type": "string",
+        "enum": ["PUBLIC", "VERIFIED_USER", "PLACEMENT_AUTHORISED", "RESTRICTED", "SEALED"]
+      },
+      "AvailabilityState": {
+        "type": "string",
+        "description": "Normalised capacity confidence/state. Provider opening schedules are separate service-access information; CLOSED is therefore not a capacity state in v0.2.",
+        "enum": ["AVAILABLE", "LIMITED", "FULL", "MANUAL_CONFIRMATION_REQUIRED", "STALE", "UNKNOWN"]
+      },
+      "MatchState": {
+        "type": "string",
+        "enum": ["SUITABLE", "POSSIBLY_SUITABLE", "NOT_MATCHED", "INSUFFICIENT_INFORMATION"]
+      },
+      "SearchOutcome": {
+        "type": "string",
+        "enum": ["CANDIDATES_FOUND", "NO_CONFIRMED_PLACEMENT"]
+      },
+      "ProviderIntegrationMode": {
+        "type": "string",
+        "enum": ["LIVE_API", "READ_ONLY_FEED", "SAFEBED_PORTAL", "MANUAL_CONFIRMATION", "RESTRICTED_SPECIALIST"]
+      },
+      "ReferralMode": {
+        "type": "string",
+        "enum": ["SAFEBED_TRANSACTION", "SAFEBED_PORTAL", "EXTERNAL_MANUAL"]
+      },
+      "ReservationMode": {
+        "type": "string",
+        "enum": ["SAFEBED_TRANSACTION", "SAFEBED_PORTAL", "EXTERNAL_MANUAL"]
+      },
+      "ReferralStatus": {
+        "type": "string",
+        "enum": ["SUBMITTED", "UNDER_REVIEW", "ACCEPTED", "DECLINED", "MORE_INFORMATION_REQUIRED", "WITHDRAWN", "EXPIRED"]
+      },
+      "HoldStatus": {
+        "type": "string",
+        "enum": ["ACTIVE", "RELEASED", "EXPIRED", "CONSUMED"]
+      },
+      "ReservationStatus": {
+        "type": "string",
+        "enum": ["CONFIRMED", "ARRIVED", "CANCELLED", "NO_SHOW"]
+      },
+      "MatchReasonCode": {
+        "type": "string",
+        "enum": [
+          "HOUSEHOLD_SIZE_UNSUPPORTED",
+          "CHILDREN_UNSUPPORTED",
+          "ACCESSIBILITY_UNKNOWN_OR_UNSUPPORTED",
+          "ASSISTANCE_ANIMAL_UNSUPPORTED",
+          "PET_POLICY_INCOMPATIBLE",
+          "PROFESSIONAL_REFERRAL_REQUIRED",
+          "CAPACITY_UNCONFIRMED"
+        ]
+      },
+      "ProviderCapabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["integrationMode", "referralMode", "holdSupported", "reservationMode"],
+        "properties": {
+          "integrationMode": { "$ref": "#/components/schemas/ProviderIntegrationMode" },
+          "referralMode": { "$ref": "#/components/schemas/ReferralMode" },
+          "holdSupported": { "type": "boolean" },
+          "reservationMode": { "$ref": "#/components/schemas/ReservationMode" }
+        }
+      },
+      "ServiceRules": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minimumHouseholdSize": { "type": "integer", "minimum": 1 },
+          "maximumHouseholdSize": { "type": "integer", "minimum": 1 },
+          "childrenAllowed": { "type": "boolean" },
+          "wheelchairAccessible": { "type": "boolean" },
+          "assistanceAnimalsAllowed": { "type": "boolean" },
+          "petsAllowed": { "type": "boolean" },
+          "professionalReferralRequired": { "type": "boolean" }
+        }
+      },
+      "PublicService": {
+        "type": "object",
+        "description": "Public-safe service record. Exact protected destination data is deliberately absent from this schema.",
+        "additionalProperties": false,
+        "required": ["serviceId", "providerId", "name", "publicAreaLabel", "disclosureLevel", "rules"],
+        "properties": {
+          "serviceId": { "type": "string", "minLength": 1 },
+          "providerId": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "publicAreaLabel": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "disclosureLevel": { "$ref": "#/components/schemas/DisclosureLevel" },
+          "rules": { "$ref": "#/components/schemas/ServiceRules" }
+        }
+      },
+      "ServiceDiscoveryItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["service", "providerCapabilities"],
+        "properties": {
+          "service": { "$ref": "#/components/schemas/PublicService" },
+          "providerCapabilities": { "$ref": "#/components/schemas/ProviderCapabilities" }
+        }
+      },
+      "ServiceDiscoveryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["services"],
+        "properties": {
+          "services": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ServiceDiscoveryItem" }
+          }
+        }
+      },
+      "PlacementNeed": {
+        "type": "object",
+        "description": "Temporary minimised matching profile. This is not a universal homelessness case record.",
+        "additionalProperties": false,
+        "required": ["requiredFor", "householdSize"],
+        "properties": {
+          "requiredFor": { "type": "string", "format": "date" },
+          "householdSize": { "type": "integer", "minimum": 1, "maximum": 50 },
+          "childCount": { "type": "integer", "minimum": 0, "maximum": 50, "default": 0 },
+          "wheelchairAccessRequired": { "type": "boolean", "default": false },
+          "assistanceAnimal": { "type": "boolean", "default": false },
+          "otherPets": { "type": "boolean", "default": false },
+          "professionalReferralAvailable": {
+            "type": "boolean",
+            "default": false,
+            "description": "Access-pathway fact only. false must not by itself become a moral/suitability rejection where a professional referral route can still be offered."
+          }
+        }
+      },
+      "CapacitySnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "serviceId",
+          "availableUnits",
+          "maximumUnits",
+          "sourceRevision",
+          "sourceUpdatedAt",
+          "observedAt",
+          "freshUntil",
+          "manualConfirmationRequired"
+        ],
+        "properties": {
+          "serviceId": { "type": "string", "minLength": 1 },
+          "availableUnits": { "type": "integer", "minimum": 0 },
+          "maximumUnits": { "type": "integer", "minimum": 0 },
+          "sourceRevision": { "type": "string", "minLength": 1 },
+          "sourceUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Authoritative source/provider update time where available."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When SafeBed successfully observed the authoritative source."
+          },
+          "freshUntil": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Latest time this observation may be treated as sufficiently current under the integration/provider policy."
+          },
+          "manualConfirmationRequired": { "type": "boolean" }
+        }
+      },
+      "NormalisedAvailability": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CapacitySnapshot" },
+          {
+            "type": "object",
+            "required": ["state"],
+            "properties": {
+              "state": { "$ref": "#/components/schemas/AvailabilityState" }
+            }
+          }
+        ]
+      },
+      "MatchReason": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "$ref": "#/components/schemas/MatchReasonCode" },
+          "message": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        }
+      },
+      "MatchResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["service", "providerCapabilities", "matchState", "reasons", "availability"],
+        "properties": {
+          "service": { "$ref": "#/components/schemas/PublicService" },
+          "providerCapabilities": { "$ref": "#/components/schemas/ProviderCapabilities" },
+          "matchState": { "$ref": "#/components/schemas/MatchState" },
+          "reasons": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MatchReason" }
+          },
+          "availability": { "$ref": "#/components/schemas/NormalisedAvailability" }
+        }
+      },
+      "MatchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["outcome", "matches"],
+        "properties": {
+          "outcome": { "$ref": "#/components/schemas/SearchOutcome" },
+          "matches": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MatchResult" }
+          }
+        }
+      },
+      "CreateReferralRequest": {
+        "type": "object",
+        "description": "Minimal discovery transaction. Provider-specific personal fields are intentionally not standardised in v0.2.",
+        "additionalProperties": false,
+        "required": ["providerId", "serviceId"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "serviceId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "Referral": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["referralId", "serviceId", "status", "createdAt", "updatedAt"],
+        "properties": {
+          "referralId": { "type": "string", "minLength": 1 },
+          "serviceId": { "type": "string", "minLength": 1 },
+          "status": { "$ref": "#/components/schemas/ReferralStatus" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateHoldRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["providerId", "referralId", "serviceId", "expectedSourceRevision", "idempotencyKey", "requestedSeconds"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "referralId": { "type": "string", "minLength": 1 },
+          "serviceId": { "type": "string", "minLength": 1 },
+          "expectedSourceRevision": { "type": "string", "minLength": 1 },
+          "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 200 },
+          "requestedSeconds": { "type": "integer", "minimum": 60, "maximum": 1800 }
+        }
+      },
+      "Hold": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["holdId", "referralId", "serviceId", "status", "createdAt", "expiresAt", "sourceRevision"],
+        "properties": {
+          "holdId": { "type": "string", "minLength": 1 },
+          "referralId": { "type": "string", "minLength": 1 },
+          "serviceId": { "type": "string", "minLength": 1 },
+          "status": { "$ref": "#/components/schemas/HoldStatus" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "sourceRevision": { "type": "string", "minLength": 1 }
+        }
+      },
+      "CreateReservationRequest": {
+        "type": "object",
+        "description": "No role/disclosure privilege is accepted from this request. Production authorisation is server-derived.",
+        "additionalProperties": false,
+        "required": ["providerId", "serviceId", "referralId", "holdId", "idempotencyKey"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "serviceId": { "type": "string", "minLength": 1 },
+          "referralId": { "type": "string", "minLength": 1 },
+          "holdId": { "type": "string", "minLength": 1 },
+          "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 200 }
+        }
+      },
+      "ProviderDestination": {
+        "type": "object",
+        "description": "Destination fields are returned only after server-side disclosure policy allows them. This schema must never appear inside PublicService or public discovery responses.",
+        "additionalProperties": false,
+        "required": ["addressText", "latitude", "longitude"],
+        "properties": {
+          "addressText": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+          "arrivalInstructions": { "type": "string", "maxLength": 2000 }
+        }
+      },
+      "Reservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reservationId", "referralId", "serviceId", "status", "reservedAt"],
+        "properties": {
+          "reservationId": { "type": "string", "minLength": 1 },
+          "referralId": { "type": "string", "minLength": 1 },
+          "serviceId": { "type": "string", "minLength": 1 },
+          "status": { "$ref": "#/components/schemas/ReservationStatus" },
+          "reservedAt": { "type": "string", "format": "date-time" },
+          "destination": { "$ref": "#/components/schemas/ProviderDestination" },
+          "arrivalConfirmedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ProblemCode": {
+        "type": "string",
+        "enum": [
+          "VALIDATION_FAILED",
+          "FORBIDDEN",
+          "NOT_FOUND",
+          "PROVIDER_UNAVAILABLE",
+          "CAPACITY_CONFLICT",
+          "UNSUPPORTED_PROVIDER_CAPABILITY",
+          "INVALID_PROVIDER_TRANSITION"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "$ref": "#/components/schemas/ProblemCode" },
+          "message": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "correlationId": { "type": "string", "maxLength": 200 }
+        }
+      }
+    }
+  }
+}

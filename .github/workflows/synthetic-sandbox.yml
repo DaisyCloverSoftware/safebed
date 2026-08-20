@@ -5,6 +5,9 @@ on:
     paths:
       - "src/**"
       - "test/**"
+      - "api/openapi.v0.2.json"
+      - "api/README.md"
+      - "docs/safebed-availability-protocol-v0.2.md"
       - "package.json"
       - "tsconfig.json"
       - ".github/workflows/synthetic-sandbox.yml"
@@ -38,7 +41,7 @@ jobs:
       - name: Install exact discovery dependency
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
 
-      - name: Run synthetic safety regression suite
+      - name: Run synthetic safety and contract regression suite
         run: npm test
 
       - name: Run strict TypeScript check
