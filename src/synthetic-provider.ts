@@ -269,21 +269,13 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     }
     this.#expireHolds(input.now);
 
-    const existingBinding = this.#reservationByIdempotencyKey.get(input.idempotencyKey);
-    if (existingBinding) {
-      if (
-        existingBinding.referralId !== input.referralId ||
-        existingBinding.holdId !== input.holdId ||
-        existingBinding.canDiscloseDestination !== input.canDiscloseDestination
-      ) {
-        throw new IdempotencyConflictError();
-      }
-      const existingReservation = this.#reservations.get(existingBinding.reservationId);
-      if (!existingReservation) {
-        throw new InvalidProviderTransitionError("Idempotent reservation binding has no corresponding reservation.");
-      }
-      return existingReservation;
-    }
+    const existingReservation = this.lookupReservationByIdempotency({
+      referralId: input.referralId,
+      holdId: input.holdId,
+      idempotencyKey: input.idempotencyKey,
+      canDiscloseDestination: input.canDiscloseDestination,
+    });
+    if (existingReservation) return existingReservation;
 
     const referral = this.#referral(input.referralId);
     if (referral.status !== "ACCEPTED") {
@@ -314,6 +306,29 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
       canDiscloseDestination: input.canDiscloseDestination,
     });
     return reservation;
+  }
+
+  lookupReservationByIdempotency(input: {
+    referralId: string;
+    holdId: string;
+    idempotencyKey: string;
+    canDiscloseDestination: boolean;
+  }): Reservation | undefined {
+    this.#assertOnline();
+    const existingBinding = this.#reservationByIdempotencyKey.get(input.idempotencyKey);
+    if (!existingBinding) return undefined;
+    if (
+      existingBinding.referralId !== input.referralId ||
+      existingBinding.holdId !== input.holdId ||
+      existingBinding.canDiscloseDestination !== input.canDiscloseDestination
+    ) {
+      throw new IdempotencyConflictError();
+    }
+    const existingReservation = this.#reservations.get(existingBinding.reservationId);
+    if (!existingReservation) {
+      throw new InvalidProviderTransitionError("Idempotent reservation binding has no corresponding reservation.");
+    }
+    return existingReservation;
   }
 
   async confirmArrival(reservationId: string, now: Date): Promise<Reservation> {
