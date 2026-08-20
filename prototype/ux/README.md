@@ -71,20 +71,52 @@ The prototype then:
 - keeps cached/static service information visible;
 - warns not to travel based on a previous capacity count.
 
+## Accessibility evidence
+
+The prototype has two dependency-free rendered Chrome regression layers in addition to the synthetic model tests.
+
+`node scripts/browser-ux-smoke.mjs` exercises the visible interaction contract, including:
+
+- focus transfer between views;
+- search/result flow;
+- protected-specialist behaviour;
+- List/Map keyboard operation;
+- offline fail-safe behaviour;
+- dialog interaction;
+- provider controls;
+- narrow-viewport overflow.
+
+`node scripts/browser-ux-a11y.mjs` inspects Chrome's rendered Accessibility Tree and exercises:
+
+- skip link and main-landmark exposure;
+- concise route-button names with separate descriptions;
+- heading level and screen-transition focus;
+- service-specific names for repeated result actions;
+- offline toggle state;
+- dialog name, focus entry and focus restoration;
+- provider capacity accessible naming;
+- hidden-view exclusion from the accessibility tree;
+- 320px reflow;
+- reduced-motion behaviour.
+
+These automated checks are regression evidence, **not a WCAG-conformance claim and not a substitute for real screen-reader use**.
+
+The remaining manual assistive-technology acceptance plan is documented in [`../../docs/ux-assistive-technology-validation-v0.1.md`](../../docs/ux-assistive-technology-validation-v0.1.md). It defines representative NVDA, VoiceOver and TalkBack coverage, core synthetic journeys, failure criteria and safeguarding stop conditions.
+
 ## Important limitations
 
 This prototype does not yet prove:
 
 - WCAG conformance;
-- screen-reader behaviour across assistive technologies;
-- browser compatibility;
+- acceptable screen-reader behaviour across the representative manual assistive-technology matrix;
+- browser compatibility beyond the automated tested browser plus future manual matrix;
 - real map/navigation integration;
 - production identity/authorisation;
 - protected-location security against browser/network inspection in a deployed app;
 - mobile performance on low-end devices;
 - live provider workflow usability.
 
-Those require dedicated browser/accessibility testing and co-design before issue #5 can be considered complete.
+Issue #5 should remain open until the documented manual assistive-technology and human usability/safeguarding validation has been completed and release-blocking findings have been re-tested.
 
 ## Public repository rule
 

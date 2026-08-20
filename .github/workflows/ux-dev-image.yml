@@ -18,14 +18,28 @@ concurrency:
 jobs:
   publish:
     name: Build and publish synthetic UX image
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'prototype/ux-v0.1'
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.pull_request.head.ref == 'prototype/ux-v0.1' ||
+       github.event.pull_request.head.ref == 'prototype/ux-accessibility-v0.1')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Check out repository
+      - name: Check out exact trusted PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+
+      - name: Prove exact source revision
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$EXPECTED_HEAD"
+          echo "Building exact SafeBed UX head: $actual"
 
       - name: Log in to GHCR
         shell: bash
@@ -38,10 +52,12 @@ jobs:
       - name: Build and publish exact-head image
         id: image
         shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           image="ghcr.io/daisycloversoftware/safebed"
-          tag="ux-${GITHUB_SHA}"
+          tag="ux-${HEAD_SHA}"
           docker build --pull --file Containerfile.ux --tag "$image:$tag" .
           docker push "$image:$tag" | tee /tmp/safebed-push.log
           digest="$(sed -n 's/.*digest: \(sha256:[0-9a-f]\{64\}\).*/\1/p' /tmp/safebed-push.log | tail -n 1)"
@@ -51,9 +67,11 @@ jobs:
 
       - name: Verify static prototype marker from built image
         shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          container="$(docker create "ghcr.io/daisycloversoftware/safebed:ux-${GITHUB_SHA}")"
+          container="$(docker create "ghcr.io/daisycloversoftware/safebed:ux-${HEAD_SHA}")"
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
           docker cp "$container:/usr/share/nginx/html/index.html" /tmp/index.html
           grep -Fq 'SafeBed synthetic UX prototype' /tmp/index.html
