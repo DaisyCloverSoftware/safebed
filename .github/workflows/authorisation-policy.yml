@@ -5,6 +5,7 @@ on:
     paths:
       - "prototype/authorisation/**"
       - "scripts/authorisation-policy.test.mjs"
+      - "scripts/placement-transaction-authorisation.test.mjs"
       - "docs/identity-and-authorisation-model-v0.1.md"
       - "docs/templates/authorisation-test-matrix-v0.1.md"
       - ".github/workflows/authorisation-policy.yml"
@@ -34,5 +35,8 @@ jobs:
           node-version: "24.19.0"
           package-manager-cache: false
 
-      - name: Run authorisation policy contract
+      - name: Run identity/disclosure authorisation policy contract
         run: node scripts/authorisation-policy.test.mjs
+
+      - name: Run placement transaction authorisation policy contract
+        run: node scripts/placement-transaction-authorisation.test.mjs
