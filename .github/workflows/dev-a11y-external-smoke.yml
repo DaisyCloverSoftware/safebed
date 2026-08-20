@@ -1,0 +1,48 @@
+name: DEV accessibility external smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dev-a11y-external-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify accessibility DEV revision over public HTTPS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fetch SafeBed DEV and prove accessibility revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://dev-safebed.daisycloversoftware.uk'
+          headers="$RUNNER_TEMP/headers.txt"
+          html="$RUNNER_TEMP/index.html"
+          app="$RUNNER_TEMP/app.js"
+
+          code="$(curl --silent --show-error --location --max-time 20 --connect-timeout 10 \
+            --dump-header "$headers" --output "$html" --write-out '%{http_code}' "$base/")"
+          [[ "$code" == '200' ]]
+          grep -Eiq '^content-type:[[:space:]]*text/html' "$headers"
+
+          # Generic synthetic boundary markers.
+          grep -Fq 'SafeBed synthetic UX prototype' "$html"
+          grep -Fq 'No real services, people or locations are shown.' "$html"
+
+          # Accessibility-revision markers absent from the previous DEV image.
+          grep -Fq 'aria-labelledby="role-person-title" aria-describedby="role-person-description"' "$html"
+          grep -Fq 'id="announcement" class="sr-only" aria-live="polite" aria-atomic="true"' "$html"
+          grep -Fq 'id="offline-toggle" class="secondary" type="button" aria-pressed="false"' "$html"
+          grep -Fq 'id="capacity-output" aria-live="polite" aria-atomic="true" aria-label="Usable spaces tonight"' "$html"
+          grep -Fq 'id="dialog-title" tabindex="-1"' "$html"
+
+          app_code="$(curl --silent --show-error --location --max-time 20 --connect-timeout 10 \
+            --output "$app" --write-out '%{http_code}' "$base/app.js")"
+          [[ "$app_code" == '200' ]]
+          grep -Fq 'button.setAttribute("aria-label", `${action.label} for ${service.name}`)' "$app"
+          grep -Fq 'offlineToggle.setAttribute("aria-pressed", String(state.offline))' "$app"
+
+          echo "SafeBed DEV accessibility revision verified externally: HTTP 200 and revision-specific markers matched."
