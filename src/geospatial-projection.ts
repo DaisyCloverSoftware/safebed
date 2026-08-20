@@ -60,9 +60,14 @@ function cloneProjection(projection: PublicMapProjection): PublicMapProjection {
  * For non-PUBLIC services an exact point is never accepted as a public
  * projection, even if a caller accidentally supplied one in configuration.
  * Protected services must use an explicitly approved SAFE_AREA or no geometry.
+ * SEALED services always project to no geometry through the ordinary client path.
  */
 export function projectForPublicMap(location: InternalServiceLocation): PublicMapProjection {
   const projection = location.safePublicProjection;
+
+  if (location.disclosureLevel === "SEALED") {
+    return { kind: "NO_GEOMETRY", label: location.publicAreaLabel };
+  }
 
   if (location.disclosureLevel === "PUBLIC") {
     return projection
