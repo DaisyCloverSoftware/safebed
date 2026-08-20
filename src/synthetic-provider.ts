@@ -331,6 +331,19 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     return existingReservation;
   }
 
+  lookupReservation(reservationId: string): Reservation | undefined {
+    this.#assertOnline();
+    return this.#reservations.get(reservationId);
+  }
+
+  lookupDestinationForReservation(reservationId: string): ProviderDestination | undefined {
+    this.#assertOnline();
+    const reservation = this.#reservations.get(reservationId);
+    if (!reservation) return undefined;
+    const destination = this.#destinations.get(reservation.serviceId);
+    return destination ? { ...destination } : undefined;
+  }
+
   async confirmArrival(reservationId: string, now: Date): Promise<Reservation> {
     this.#assertOnline();
     const reservation = this.#reservations.get(reservationId);
