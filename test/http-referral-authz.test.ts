@@ -97,10 +97,10 @@ function referralBody(service: { providerId: string; serviceId: string }) {
 
 async function postReferral(baseUrl: string, service = syntheticProfileServices.liveApi, init: RequestInit = {}) {
   return fetch(`${baseUrl}/v1/referrals`, {
+    ...init,
     method: "POST",
     headers: { "content-type": "application/json", ...(init.headers ?? {}) },
-    body: referralBody(service),
-    ...init,
+    body: init.body ?? referralBody(service),
   });
 }
 
