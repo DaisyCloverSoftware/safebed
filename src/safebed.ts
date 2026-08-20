@@ -14,11 +14,30 @@ import type {
 } from "./model.ts";
 import { ProviderUnavailableError } from "./synthetic-provider.ts";
 
+export interface PublicServiceDiscoveryItem {
+  readonly service: PublicService;
+  readonly providerCapabilities: ProviderCapabilities;
+}
+
 export class SafeBedSandbox {
   #providers: readonly ProviderAdapter[];
 
   constructor(providers: readonly ProviderAdapter[]) {
     this.#providers = providers;
+  }
+
+  listPublicServices(): readonly PublicServiceDiscoveryItem[] {
+    return this.#providers.flatMap((provider) =>
+      provider.listServices().map((service) => ({
+        service,
+        providerCapabilities: provider.capabilities,
+      })),
+    );
+  }
+
+  async getAvailability(serviceId: string, now = new Date()): Promise<NormalisedAvailability> {
+    const provider = this.#providerForService(serviceId);
+    return this.#availability(provider, serviceId, now);
   }
 
   async search(need: PlacementNeed, now = new Date()): Promise<SearchResult> {
@@ -96,6 +115,14 @@ export class SafeBedSandbox {
   #provider(providerId: string): ProviderAdapter {
     const provider = this.#providers.find((candidate) => candidate.providerId === providerId);
     if (!provider) throw new Error(`Unknown provider: ${providerId}`);
+    return provider;
+  }
+
+  #providerForService(serviceId: string): ProviderAdapter {
+    const provider = this.#providers.find((candidate) =>
+      candidate.listServices().some((service) => service.serviceId === serviceId),
+    );
+    if (!provider) throw new Error(`Unknown service: ${serviceId}`);
     return provider;
   }
 
