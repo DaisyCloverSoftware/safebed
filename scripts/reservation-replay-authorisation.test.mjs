@@ -106,7 +106,13 @@ expect(supportReservation, exactConfirmedReplay, Decision.ALLOW, {
   audit: true,
 });
 
-// Replay marker is insufficient without the exact accepted/confirmed state.
+// The same create request may still be replayed after the reservation has advanced to ARRIVED.
+expect(supportReservation, { ...exactConfirmedReplay, reservationState: "ARRIVED" }, Decision.ALLOW, {
+  reason: "reservation_idempotent_replay",
+  audit: true,
+});
+
+// Replay marker is insufficient without the exact accepted/existing-reservation state.
 expect(supportReservation, { ...exactConfirmedReplay, reservationState: "CANCELLED" }, Decision.DENY, {
   reason: "reservation_requires_active_hold",
 });
