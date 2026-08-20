@@ -6,18 +6,18 @@
 
 SafeBed's current UK interoperability baseline is **Open Referral UK (ORUK) 3.0**.
 
-ORUK 3.0 is a UK profile of the international Human Services Data Specification (HSDS). Its published API exposes the UK-profile endpoints for service-directory interoperability.
+ORUK 3.0 is a UK profile of the international Human Services Data Specification (HSDS). Its published API exposes the UK-profile endpoints for service-directory interoperability. As checked on 20 August 2026, ORUK continues to describe 3.0 as the current/latest published UK profile.
 
-International HSDS evolved after the ORUK 3.0 profile was published. In particular, **HSDS 3.1 introduced `service_capacity` and `unit`**. These objects are present in current international HSDS documentation but are **not currently part of the published ORUK 3.0 profile**.
+International HSDS evolved after the ORUK 3.0 profile was published. **HSDS 3.1 introduced `service_capacity`, `unit`, and the `service.capacities` relationship.** The international standard has since moved to the 3.2.x line (3.2.3 current upstream at this review point), and these capacity concepts remain present in the current schema. They are **not currently part of the published ORUK 3.0 profile**.
 
-SafeBed must not describe a SafeBed extension as if it were already part of ORUK.
+SafeBed must not describe a SafeBed extension as if it were already part of ORUK, nor describe 3.1 as though it were the latest international HSDS version.
 
 ## 2. Mapping rule
 
 For every SafeBed concept use this precedence:
 
 1. **ORUK 3.0 field/entity** where the current UK profile already models the concept.
-2. **Later international HSDS field/entity** where it cleanly models a SafeBed requirement and a UK-profile extension has not yet adopted it.
+2. **Current international HSDS field/entity** where it cleanly models a SafeBed requirement and the UK profile has not yet adopted it.
 3. **SafeBed-specific extension** only when neither standard provides the required placement semantics.
 
 Every SafeBed-specific extension should have a documented interoperability rationale.
@@ -29,7 +29,7 @@ Every SafeBed-specific extension should have a documented interoperability ratio
 | Provider organisation | ORUK 3.0 `organization` | Reuse directly where source provides ORUK-compatible data. |
 | Emergency accommodation service | ORUK 3.0 `service` | Reuse as the public/service identity. Do not create a parallel service record when an authoritative ORUK identifier exists. |
 | Service at physical/virtual location | ORUK 3.0 `service_at_location` + `location` | Reuse for public-safe location/service relationships. Protected destination rules remain a SafeBed policy layer. |
-| Address | ORUK 3.0 `address` nested through location structures | Reuse only when disclosure policy allows the address to be returned. |
+| Address | ORUK 3.0 `address` nested through location structures | Reuse only when disclosure policy allows the address to be returned. Sensitive exact locations must not be placed in an anonymous/open dataset merely to be hidden by the UI. |
 | Accessibility | ORUK 3.0 `accessibility` | Reuse published accessibility data; absence must not be interpreted as confirmed accessibility. |
 | Opening/check-in availability window | ORUK 3.0 `schedule` plus SafeBed placement rules | Reuse service schedules for ordinary opening information. Placement-specific latest-arrival/check-in deadlines may require SafeBed transactional metadata. |
 | Geographic service coverage | ORUK 3.0 `service_area` | Reuse for ordinary coverage/eligibility geography where applicable. |
@@ -42,15 +42,17 @@ Every SafeBed-specific extension should have a documented interoperability ratio
 
 ## 4. Capacity mapping
 
+The capacity concepts below were introduced in international HSDS 3.1 and remain present in the current 3.2.x international schema. SafeBed uses the current schema as the reference point while keeping the UK-profile boundary explicit.
+
 | SafeBed concept | Standards source | SafeBed treatment |
 | --- | --- | --- |
-| Capacity object identity | HSDS 3.1+ `service_capacity.id` | Align where a source/provider can expose a stable capacity object. |
-| Service link | HSDS 3.1+ `service_capacity.service_id` | Preserve authoritative service linkage. |
-| Available unit count | HSDS 3.1+ `service_capacity.available` | Map provider-reported usable capacity when a numeric count is meaningful. |
-| Maximum unit count | HSDS 3.1+ `service_capacity.maximum` | Reuse where provider has meaningful maximum capacity. |
-| Capacity description | HSDS 3.1+ `service_capacity.description` | Describe what the capacity represents. |
-| Source update timestamp | HSDS 3.1+ `service_capacity.updated` | Preserve the source's update/change time. |
-| Unit of capacity | HSDS 3.1+ `unit` | Align concepts such as bed/room/unit where practical. Do not force a provider's richer internal inventory into a misleading count. |
+| Capacity object identity | international HSDS `service_capacity.id` | Align where a source/provider can expose a stable capacity object. |
+| Service link | international HSDS `service_capacity.service_id` | Preserve authoritative service linkage. |
+| Available unit count | international HSDS `service_capacity.available` | Map provider-reported usable capacity when a numeric count is meaningful. |
+| Maximum unit count | international HSDS `service_capacity.maximum` | Reuse where provider has meaningful maximum capacity. |
+| Capacity description | international HSDS `service_capacity.description` | Describe what the capacity represents. |
+| Source update timestamp | international HSDS `service_capacity.updated` | Preserve the source's update/change time. |
+| Unit of capacity | international HSDS `unit` | Align concepts such as bed/room/unit where practical. Do not force a provider's richer internal inventory into a misleading count. |
 | Observation time | SafeBed extension | `observed_at`: when SafeBed successfully observed the authoritative source. This is distinct from provider `updated`. |
 | Freshness deadline | SafeBed extension | `fresh_until`: latest time SafeBed may treat the observation as current under provider/integration policy. |
 | Source revision/concurrency token | SafeBed extension / source-native | Preserve provider ETag/version/revision where available to detect races. |
@@ -100,7 +102,16 @@ A SafeBed non-match is not a provider rejection. The system must distinguish:
 
 ORUK/HSDS location data describes service locations. SafeBed additionally has to decide whether a particular caller may receive a particular location field.
 
-SafeBed disclosure policy therefore wraps standard location data with states such as:
+Current ORUK data-sharing guidance explicitly says sensitive information that should not be public — including the location of a refuge — must not be exposed in the open ORUK feed. ORUK compliance guidance also distinguishes open service data from private/confidential information that may require separately secured APIs.
+
+SafeBed therefore uses this boundary:
+
+- public/anonymous discovery receives only public-safe service/location information;
+- an exact protected destination is excluded from the public payload rather than merely hidden visually;
+- an authorised workflow may disclose an exact standard location only when policy permits it;
+- SafeBed disclosure classes describe **application authorisation**, not ORUK roles or a replacement ORUK location schema.
+
+SafeBed disclosure policy currently uses states such as:
 
 - `PUBLIC`;
 - `VERIFIED_USER`;
@@ -108,9 +119,9 @@ SafeBed disclosure policy therefore wraps standard location data with states suc
 - `RESTRICTED`;
 - `SEALED`.
 
-This is a **SafeBed authorisation policy**, not a proposed replacement for the ORUK location model.
-
 A protected location must be filtered before the response reaches an unauthorised client. Hiding a marker visually while returning precise coordinates in JSON/HTML is prohibited.
+
+The exact partner-only/authorised data transport remains subject to standards/security review.
 
 ## 8. Transaction concepts without current ORUK equivalents
 
@@ -174,27 +185,33 @@ SafeBed must not label the second group as ORUK endpoints.
 Before treating the SafeBed availability profile as a stable public standard:
 
 1. validate the mapping with Open Referral UK maintainers/community;
-2. confirm whether a UK profile update is planned for later HSDS capacity entities;
-3. prefer upstream-compatible semantics where possible;
-4. document any remaining SafeBed-specific fields;
-5. avoid extending standard entities merely for convenience;
-6. keep transaction state separable from general service-directory data.
+2. confirm whether a UK profile update is planned for international HSDS capacity entities;
+3. confirm whether SafeBed should pin a specific 3.2.x point version for formal capacity conformance tests;
+4. prefer upstream-compatible semantics where possible;
+5. document any remaining SafeBed-specific fields;
+6. avoid extending standard entities merely for convenience;
+7. keep transaction state separable from general service-directory data;
+8. align protected-information handling with ORUK's open-data boundary while keeping SafeBed authorisation policy explicit.
 
 ## 11. Current implementation impact
 
 The discovery OpenAPI and synthetic sandbox should therefore use this terminology:
 
-- **ORUK-compatible/aligned service discovery**;
-- **HSDS 3.1+ aligned capacity representation**;
-- **SafeBed-specific placement transactions and disclosure policy**.
+- **ORUK 3.0-compatible/aligned service discovery**;
+- **current-HSDS-informed capacity representation (`service_capacity` / `unit`, introduced in 3.1 and retained in 3.2.x)**;
+- **SafeBed-specific placement transactions, freshness and disclosure policy**.
 
-They should not claim `service_capacity`, holds, reservations or referrals are currently part of ORUK 3.0.
+They should not claim `service_capacity`, holds, reservations, referrals, SafeBed freshness fields or SafeBed disclosure roles are currently part of ORUK 3.0.
 
 ## 12. References
 
+- ORUK governance/version position: https://openreferraluk.org/about/50-governance
 - ORUK current API/profile: https://openreferraluk.org/developers/api
 - ORUK data model: https://openreferraluk.org/developers/schemata
 - ORUK OpenAPI specification: https://openreferraluk.org/developers/specifications
 - ORUK changelog: https://openreferraluk.org/developers/changelog
+- ORUK data sharing/privacy guidance: https://openreferraluk.org/developers/data-sharing
+- ORUK compliance criteria: https://openreferraluk.org/developers/compliance
 - HSDS schema reference: https://docs.openreferral.org/en/latest/hsds/schema_reference.html
 - HSDS changelog: https://docs.openreferral.org/en/latest/hsds/changelog.html
+- HSDS upstream specification: https://github.com/openreferral/specification
