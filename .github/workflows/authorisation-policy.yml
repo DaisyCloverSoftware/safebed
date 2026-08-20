@@ -1,0 +1,46 @@
+name: Authorisation policy contract
+
+on:
+  pull_request:
+    paths:
+      - "prototype/authorisation/**"
+      - "scripts/authorisation-policy.test.mjs"
+      - "scripts/placement-transaction-authorisation.test.mjs"
+      - "scripts/reservation-replay-authorisation.test.mjs"
+      - "docs/identity-and-authorisation-model-v0.1.md"
+      - "docs/templates/authorisation-test-matrix-v0.1.md"
+      - ".github/workflows/authorisation-policy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authorisation-policy-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Prove synthetic deny-by-default matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js 24.19.0 LTS
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.19.0"
+          package-manager-cache: false
+
+      - name: Run identity/disclosure authorisation policy contract
+        run: node scripts/authorisation-policy.test.mjs
+
+      - name: Run placement transaction authorisation policy contract
+        run: node scripts/placement-transaction-authorisation.test.mjs
+
+      - name: Run provider-proven reservation replay authorisation contract
+        run: node scripts/reservation-replay-authorisation.test.mjs
