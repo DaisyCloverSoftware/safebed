@@ -10,6 +10,9 @@ export const Action = Object.freeze({
   READ_PROFESSIONAL_ROUTE: "READ_PROFESSIONAL_ROUTE",
   CREATE_REFERRAL: "CREATE_REFERRAL",
   REVIEW_REFERRAL: "REVIEW_REFERRAL",
+  REQUEST_HOLD: "REQUEST_HOLD",
+  CREATE_RESERVATION: "CREATE_RESERVATION",
+  CONFIRM_ARRIVAL: "CONFIRM_ARRIVAL",
   UPDATE_CAPACITY: "UPDATE_CAPACITY",
   READ_CAPACITY: "READ_CAPACITY",
   READ_REFERRAL_NARRATIVE: "READ_REFERRAL_NARRATIVE",
@@ -29,6 +32,9 @@ const privilegedActions = new Set([
   Action.READ_PROFESSIONAL_ROUTE,
   Action.CREATE_REFERRAL,
   Action.REVIEW_REFERRAL,
+  Action.REQUEST_HOLD,
+  Action.CREATE_RESERVATION,
+  Action.CONFIRM_ARRIVAL,
   Action.UPDATE_CAPACITY,
   Action.READ_CAPACITY,
   Action.READ_REFERRAL_NARRATIVE,
@@ -40,6 +46,9 @@ const privilegedActions = new Set([
 const sensitiveAuditActions = new Set([
   Action.CREATE_REFERRAL,
   Action.REVIEW_REFERRAL,
+  Action.REQUEST_HOLD,
+  Action.CREATE_RESERVATION,
+  Action.CONFIRM_ARRIVAL,
   Action.UPDATE_CAPACITY,
   Action.READ_REFERRAL_NARRATIVE,
   Action.READ_DESTINATION,
@@ -101,6 +110,22 @@ function hasPlacementRelationship(principal, resource) {
   return resource?.authorisedOrganisationIds?.includes(organisationId) === true;
 }
 
+function hasProviderOrPlacementRelationship(principal, resource) {
+  return ownsProviderResource(principal, resource) || hasPlacementRelationship(principal, resource);
+}
+
+function referralAccepted(resource) {
+  return resource?.referralState === "ACCEPTED" && resource?.providerDecision === "ACCEPTED";
+}
+
+function activeHold(resource) {
+  return referralAccepted(resource) && resource?.holdState === "ACTIVE";
+}
+
+function confirmedReservation(resource) {
+  return resource?.reservationState === "CONFIRMED";
+}
+
 function hasActiveProgrammeEntitlement(principal, programmeId, now) {
   if (!programmeId) return false;
   return principal?.entitlements?.some((entitlement) => {
@@ -151,7 +176,7 @@ export function authorise({ principal, action, resource = {}, context = {}, now 
   if (principal?.kind === "MACHINE") {
     if (!isActiveMachine(principal)) return deny("machine_not_active");
     if (!hasActiveOrganisation(principal)) return deny("organisation_not_verified");
-    if (!ownsProviderResource(principal, resource)) return deny("machine_cross_organisation");
+    if (!ownsProviderResource(principal, resource)) return deny("machine_cross_organisation", { conceal: true });
 
     if (action === Action.READ_CAPACITY && hasMachineScope(principal, "capacity.read")) {
       return allow("machine_capacity_read_scope", action);
@@ -161,6 +186,21 @@ export function authorise({ principal, action, resource = {}, context = {}, now 
     }
     if (action === Action.REVIEW_REFERRAL && hasMachineScope(principal, "referral.status.write")) {
       return allow("machine_referral_status_scope", action);
+    }
+    if (action === Action.REQUEST_HOLD && hasMachineScope(principal, "hold.manage")) {
+      return referralAccepted(resource)
+        ? allow("machine_hold_manage_scope", action)
+        : deny("hold_requires_accepted_referral");
+    }
+    if (action === Action.CREATE_RESERVATION && hasMachineScope(principal, "reservation.manage")) {
+      return activeHold(resource)
+        ? allow("machine_reservation_manage_scope", action)
+        : deny("reservation_requires_active_hold");
+    }
+    if (action === Action.CONFIRM_ARRIVAL && hasMachineScope(principal, "placement.arrival.write")) {
+      return confirmedReservation(resource)
+        ? allow("machine_arrival_write_scope", action)
+        : deny("arrival_requires_confirmed_reservation");
     }
     return deny("machine_scope_not_permitted", { conceal: true });
   }
@@ -187,6 +227,30 @@ export function authorise({ principal, action, resource = {}, context = {}, now 
       return ownsProviderResource(principal, resource)
         ? allow("provider_owns_referral", action)
         : deny("cross_organisation_referral", { conceal: true });
+
+    case Action.REQUEST_HOLD:
+      if (!hasCapability(principal, "hold.request")) return deny("hold_request_capability_missing");
+      if (!hasProviderOrPlacementRelationship(principal, resource)) {
+        return deny("hold_relationship_missing", { conceal: true });
+      }
+      if (!referralAccepted(resource)) return deny("hold_requires_accepted_referral");
+      return allow("hold_request_permitted", action);
+
+    case Action.CREATE_RESERVATION:
+      if (!hasCapability(principal, "reservation.create")) return deny("reservation_create_capability_missing");
+      if (!hasProviderOrPlacementRelationship(principal, resource)) {
+        return deny("reservation_relationship_missing", { conceal: true });
+      }
+      if (!activeHold(resource)) return deny("reservation_requires_active_hold");
+      return allow("reservation_create_permitted", action);
+
+    case Action.CONFIRM_ARRIVAL:
+      if (!hasCapability(principal, "placement.arrival.write")) return deny("arrival_write_capability_missing");
+      if (!hasProviderOrPlacementRelationship(principal, resource)) {
+        return deny("arrival_relationship_missing", { conceal: true });
+      }
+      if (!confirmedReservation(resource)) return deny("arrival_requires_confirmed_reservation");
+      return allow("arrival_confirmation_permitted", action);
 
     case Action.UPDATE_CAPACITY:
       if (!hasCapability(principal, "capacity.write")) return deny("capacity_write_capability_missing");
