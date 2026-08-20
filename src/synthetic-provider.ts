@@ -16,6 +16,13 @@ export class CapacityConflictError extends Error {
   }
 }
 
+export class IdempotencyConflictError extends Error {
+  constructor(message = "The idempotency key is already bound to a different request.") {
+    super(message);
+    this.name = "IdempotencyConflictError";
+  }
+}
+
 export class ProviderUnavailableError extends Error {
   constructor(message = "The provider source is unavailable.") {
     super(message);
@@ -64,6 +71,19 @@ interface MutableReservation extends Reservation {
   status: "CONFIRMED" | "ARRIVED" | "CANCELLED" | "NO_SHOW";
 }
 
+interface HoldIdempotencyBinding {
+  readonly holdId: string;
+  readonly referralId: string;
+  readonly serviceId: string;
+}
+
+interface ReservationIdempotencyBinding {
+  readonly reservationId: string;
+  readonly referralId: string;
+  readonly holdId: string;
+  readonly canDiscloseDestination: boolean;
+}
+
 export class SyntheticProviderAdapter implements ProviderAdapter {
   readonly providerId: string;
   readonly capabilities: ProviderCapabilities;
@@ -73,8 +93,8 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
   #referrals = new Map<string, Referral>();
   #holds = new Map<string, MutableHold>();
   #reservations = new Map<string, MutableReservation>();
-  #holdByIdempotencyKey = new Map<string, string>();
-  #reservationByIdempotencyKey = new Map<string, string>();
+  #holdByIdempotencyKey = new Map<string, HoldIdempotencyBinding>();
+  #reservationByIdempotencyKey = new Map<string, ReservationIdempotencyBinding>();
   #online = true;
 
   constructor(
@@ -175,9 +195,19 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     }
     this.#expireHolds(input.now);
 
-    const existingHoldId = this.#holdByIdempotencyKey.get(input.idempotencyKey);
-    if (existingHoldId) {
-      return this.#holds.get(existingHoldId)!;
+    const existingBinding = this.#holdByIdempotencyKey.get(input.idempotencyKey);
+    if (existingBinding) {
+      if (
+        existingBinding.referralId !== input.referralId ||
+        existingBinding.serviceId !== input.serviceId
+      ) {
+        throw new IdempotencyConflictError();
+      }
+      const existingHold = this.#holds.get(existingBinding.holdId);
+      if (!existingHold) {
+        throw new InvalidProviderTransitionError("Idempotent hold binding has no corresponding hold.");
+      }
+      return existingHold;
     }
 
     const referral = this.#referral(input.referralId);
@@ -209,7 +239,11 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
       sourceRevision: this.#revision(capacity),
     };
     this.#holds.set(hold.holdId, hold);
-    this.#holdByIdempotencyKey.set(input.idempotencyKey, hold.holdId);
+    this.#holdByIdempotencyKey.set(input.idempotencyKey, {
+      holdId: hold.holdId,
+      referralId: input.referralId,
+      serviceId: input.serviceId,
+    });
     return hold;
   }
 
@@ -235,9 +269,20 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
     }
     this.#expireHolds(input.now);
 
-    const existingReservationId = this.#reservationByIdempotencyKey.get(input.idempotencyKey);
-    if (existingReservationId) {
-      return this.#reservations.get(existingReservationId)!;
+    const existingBinding = this.#reservationByIdempotencyKey.get(input.idempotencyKey);
+    if (existingBinding) {
+      if (
+        existingBinding.referralId !== input.referralId ||
+        existingBinding.holdId !== input.holdId ||
+        existingBinding.canDiscloseDestination !== input.canDiscloseDestination
+      ) {
+        throw new IdempotencyConflictError();
+      }
+      const existingReservation = this.#reservations.get(existingBinding.reservationId);
+      if (!existingReservation) {
+        throw new InvalidProviderTransitionError("Idempotent reservation binding has no corresponding reservation.");
+      }
+      return existingReservation;
     }
 
     const referral = this.#referral(input.referralId);
@@ -262,7 +307,12 @@ export class SyntheticProviderAdapter implements ProviderAdapter {
       ...(input.canDiscloseDestination && destination ? { destination } : {}),
     };
     this.#reservations.set(reservation.reservationId, reservation);
-    this.#reservationByIdempotencyKey.set(input.idempotencyKey, reservation.reservationId);
+    this.#reservationByIdempotencyKey.set(input.idempotencyKey, {
+      reservationId: reservation.reservationId,
+      referralId: input.referralId,
+      holdId: input.holdId,
+      canDiscloseDestination: input.canDiscloseDestination,
+    });
     return reservation;
   }
 
