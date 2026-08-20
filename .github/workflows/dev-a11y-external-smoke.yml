@@ -14,7 +14,23 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Fetch SafeBed DEV and prove accessibility revision
+      - name: Check out exact certified accessibility base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Prove expected accessibility source revision
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          [[ "$actual" == "$EXPECTED_SHA" ]]
+          [[ "$actual" == '44390ada67d0cea9d60041c8f1104f17d6ab9dc9' ]]
+
+      - name: Fetch SafeBed DEV and byte-compare certified assets
         shell: bash
         run: |
           set -euo pipefail
@@ -27,22 +43,24 @@ jobs:
             --dump-header "$headers" --output "$html" --write-out '%{http_code}' "$base/")"
           [[ "$code" == '200' ]]
           grep -Eiq '^content-type:[[:space:]]*text/html' "$headers"
-
-          # Generic synthetic boundary markers.
           grep -Fq 'SafeBed synthetic UX prototype' "$html"
           grep -Fq 'No real services, people or locations are shown.' "$html"
-
-          # Accessibility-revision markers absent from the previous DEV image.
-          grep -Fq 'aria-labelledby="role-person-title" aria-describedby="role-person-description"' "$html"
-          grep -Fq 'id="announcement" class="sr-only" aria-live="polite" aria-atomic="true"' "$html"
-          grep -Fq 'id="offline-toggle" class="secondary" type="button" aria-pressed="false"' "$html"
-          grep -Fq 'id="capacity-output" aria-live="polite" aria-atomic="true" aria-label="Usable spaces tonight"' "$html"
-          grep -Fq 'id="dialog-title" tabindex="-1"' "$html"
 
           app_code="$(curl --silent --show-error --location --max-time 20 --connect-timeout 10 \
             --output "$app" --write-out '%{http_code}' "$base/app.js")"
           [[ "$app_code" == '200' ]]
-          grep -Fq 'button.setAttribute("aria-label", `${action.label} for ${service.name}`)' "$app"
-          grep -Fq 'offlineToggle.setAttribute("aria-pressed", String(state.offline))' "$app"
 
-          echo "SafeBed DEV accessibility revision verified externally: HTTP 200 and revision-specific markers matched."
+          cmp --silent prototype/ux/index.html "$html" || {
+            echo 'DEV index.html does not match the certified accessibility source.' >&2
+            echo "expected=$(sha256sum prototype/ux/index.html | awk '{print $1}')" >&2
+            echo "served=$(sha256sum "$html" | awk '{print $1}')" >&2
+            exit 1
+          }
+          cmp --silent prototype/ux/app.js "$app" || {
+            echo 'DEV app.js does not match the certified accessibility source.' >&2
+            echo "expected=$(sha256sum prototype/ux/app.js | awk '{print $1}')" >&2
+            echo "served=$(sha256sum "$app" | awk '{print $1}')" >&2
+            exit 1
+          }
+
+          echo "SafeBed DEV accessibility revision verified externally: exact certified index.html and app.js are served over HTTPS."
