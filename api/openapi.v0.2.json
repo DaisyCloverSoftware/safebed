@@ -3,7 +3,7 @@
   "info": {
     "title": "SafeBed Discovery API",
     "version": "0.2.0-discovery",
-    "description": "Public, synthetic-data-first discovery contract for SafeBed emergency-accommodation interoperability. No production SafeBed API is deployed by this specification. The repository sandbox exercises the placement semantics, not an HTTP server. Open Referral UK 3.0 remains the current UK service-directory baseline; SafeBed capacity semantics are aligned toward later international HSDS capacity concepts where practical, while placement transactions and disclosure policy remain explicitly SafeBed-specific discovery concepts."
+    "description": "Public, synthetic-data-first discovery and placement interoperability contract for SafeBed emergency accommodation. No production SafeBed API is deployed by this specification. The repository sandbox now exercises selected public and protected operations over loopback HTTP using fictional data; this is transport evidence, not a production service. Open Referral UK 3.0 remains the current UK service-directory baseline; SafeBed capacity semantics are aligned toward later international HSDS capacity concepts where practical, while placement transactions and disclosure policy remain explicitly SafeBed-specific discovery concepts."
   },
   "tags": [
     { "name": "Discovery" },
@@ -16,8 +16,8 @@
       "get": {
         "tags": ["Discovery"],
         "summary": "Discover public-safe service records",
-        "description": "Returns public-safe service information and provider capability metadata. This operation is contract-only in the current synthetic sandbox; geospatial search is intentionally not yet implemented. A protected exact destination must never be returned by this operation.",
-        "x-safebed-sandbox-evidence": "contract-only",
+        "description": "Returns public-safe service information and provider capability metadata. The synthetic sandbox exercises this shape over loopback HTTP; geospatial search is intentionally not yet implemented. A protected exact destination must never be returned by this operation.",
+        "x-safebed-sandbox-evidence": "synthetic-http-tested",
         "parameters": [
           {
             "name": "area",
@@ -35,7 +35,8 @@
                 "schema": { "$ref": "#/components/schemas/ServiceDiscoveryResponse" }
               }
             }
-          }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
         }
       }
     },
@@ -44,7 +45,7 @@
         "tags": ["Discovery"],
         "summary": "Match a minimised placement need against provider services",
         "description": "Separates suitability/access-pathway reasoning from current availability. A professional referral requirement is an access/pathway reason and may produce POSSIBLY_SUITABLE rather than a hard rejection. Provider capabilities are returned independently so clients never infer bookability from a live capacity count.",
-        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "x-safebed-sandbox-evidence": "synthetic-http-tested",
         "requestBody": {
           "required": true,
           "content": {
@@ -71,7 +72,7 @@
         "tags": ["Availability"],
         "summary": "Read normalised current availability",
         "description": "The provider/integration remains authoritative. SafeBed distinguishes source update time, observation time and freshness. STALE, UNKNOWN and MANUAL_CONFIRMATION_REQUIRED must not be presented as confirmed live capacity.",
-        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "x-safebed-sandbox-evidence": "synthetic-http-tested",
         "parameters": [
           { "$ref": "#/components/parameters/ServiceId" }
         ],
@@ -93,8 +94,8 @@
       "post": {
         "tags": ["Referral"],
         "summary": "Create a provider referral transaction",
-        "description": "Discovery contract only. The v0.2 request deliberately contains no universal personal referral payload: real provider-specific fields remain gated by provider discovery, data minimisation and live-use governance. Authentication/organisation authority is server-derived and is not represented by a caller-supplied role field.",
-        "x-safebed-sandbox-evidence": "semantic-flow-tested-minimal",
+        "description": "A minimal protected synthetic HTTP harness exercises this operation with server-injected identity and provider-authoritative referral state. The v0.2 request deliberately contains no universal personal referral payload: real provider-specific fields remain gated by provider discovery, data minimisation and live-use governance. Production authentication and organisation verification are not deployed by this specification.",
+        "x-safebed-sandbox-evidence": "synthetic-http-authz-tested-minimal",
         "x-safebed-authz": "verified identity, organisation membership and provider policy required in production; scheme not yet deployed",
         "requestBody": {
           "required": true,
@@ -115,7 +116,9 @@
           },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "409": { "$ref": "#/components/responses/UnsupportedCapability" }
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/UnsupportedCapability" },
+          "503": { "$ref": "#/components/responses/ProviderUnavailable" }
         }
       }
     },
@@ -147,8 +150,8 @@
       "post": {
         "tags": ["Placement"],
         "summary": "Request a provider-authorised time-limited hold",
-        "description": "Only integrations advertising holdSupported=true may expose this action. expectedSourceRevision and idempotencyKey support conflict/retry safety. A final-space race returns an explicit conflict rather than a second confirmation.",
-        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "description": "Only integrations advertising holdSupported=true may expose this action. expectedSourceRevision and idempotencyKey support conflict/retry safety. A final-space race returns an explicit conflict rather than a second confirmation. The synthetic protected HTTP harness evaluates explicit hold authority before provider mutation.",
+        "x-safebed-sandbox-evidence": "synthetic-http-authz-tested",
         "x-safebed-authz": "verified referral relationship and provider policy required in production",
         "requestBody": {
           "required": true,
@@ -167,8 +170,10 @@
               }
             }
           },
+          "400": { "$ref": "#/components/responses/BadRequest" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "409": { "$ref": "#/components/responses/CapacityConflict" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/PlacementConflict" },
           "503": { "$ref": "#/components/responses/ProviderUnavailable" }
         }
       }
@@ -194,8 +199,8 @@
       "post": {
         "tags": ["Placement"],
         "summary": "Confirm a provider-authorised reservation",
-        "description": "The request intentionally contains no actorRole, disclosureLevel or canDiscloseDestination input. Production authority and destination disclosure must be derived server-side from verified identity, organisation/resource relationship, provider decision, placement state and any specialist entitlement. A response may omit destination even when the reservation is confirmed.",
-        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "description": "The request intentionally contains no actorRole, disclosureLevel or canDiscloseDestination input. Production authority and destination disclosure must be derived server-side from verified identity, organisation/resource relationship, provider decision, placement state and any specialist entitlement. The current synthetic protected HTTP transport always suppresses destination disclosure during reservation, proving that placement mutation authority does not itself reveal a protected location.",
+        "x-safebed-sandbox-evidence": "synthetic-http-authz-tested",
         "x-safebed-authz": "server-derived; caller-supplied privilege is prohibited",
         "requestBody": {
           "required": true,
@@ -207,15 +212,17 @@
         },
         "responses": {
           "201": {
-            "description": "Reservation confirmed; destination is included only when disclosure policy permits",
+            "description": "Reservation confirmed or exact idempotent replay returned; destination remains separately authorised",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/Reservation" }
               }
             }
           },
+          "400": { "$ref": "#/components/responses/BadRequest" },
           "403": { "$ref": "#/components/responses/Forbidden" },
-          "409": { "$ref": "#/components/responses/CapacityConflict" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/PlacementConflict" },
           "503": { "$ref": "#/components/responses/ProviderUnavailable" }
         }
       }
@@ -224,8 +231,8 @@
       "post": {
         "tags": ["Placement"],
         "summary": "Record authorised arrival confirmation",
-        "description": "Arrival should normally be confirmed by the provider or an authorised worker/integration. This operation does not require or imply continuous device tracking, geofencing or location history.",
-        "x-safebed-sandbox-evidence": "semantic-flow-tested",
+        "description": "Arrival should normally be confirmed by the provider or an authorised worker/integration. This operation does not require or imply continuous device tracking, geofencing or location history. The synthetic protected HTTP harness evaluates explicit arrival authority against current reservation state before provider mutation.",
+        "x-safebed-sandbox-evidence": "synthetic-http-authz-tested",
         "x-safebed-authz": "provider/authorised placement relationship required in production",
         "parameters": [
           { "$ref": "#/components/parameters/ReservationId" }
@@ -239,9 +246,11 @@
               }
             }
           },
+          "400": { "$ref": "#/components/responses/BadRequest" },
           "403": { "$ref": "#/components/responses/Forbidden" },
           "404": { "$ref": "#/components/responses/NotFound" },
-          "409": { "$ref": "#/components/responses/InvalidTransition" }
+          "409": { "$ref": "#/components/responses/InvalidTransition" },
+          "503": { "$ref": "#/components/responses/ProviderUnavailable" }
         }
       }
     }
@@ -292,6 +301,14 @@
       },
       "CapacityConflict": {
         "description": "Capacity/revision conflict, including a final-space race or inactive hold",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "PlacementConflict": {
+        "description": "Placement transaction conflict. Problem.code distinguishes CAPACITY_CONFLICT, IDEMPOTENCY_CONFLICT, UNSUPPORTED_PROVIDER_CAPABILITY and other provider-state conflicts.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+      },
+      "IdempotencyConflict": {
+        "description": "The idempotency key is already bound to a different provider transaction identity",
         "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
       },
       "UnsupportedCapability": {
@@ -614,8 +631,9 @@
           "NOT_FOUND",
           "PROVIDER_UNAVAILABLE",
           "CAPACITY_CONFLICT",
+          "IDEMPOTENCY_CONFLICT",
           "UNSUPPORTED_PROVIDER_CAPABILITY",
-          "INVALID_PROVIDER_TRANSITION"
+          "INVALID_TRANSITION"
         ]
       },
       "Problem": {

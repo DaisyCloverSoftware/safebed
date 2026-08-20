@@ -27,6 +27,8 @@ const specification = JSON.parse(
 );
 const schemas = specification.components?.schemas;
 assert.ok(schemas, "OpenAPI v0.2 must define components.schemas");
+const responses = specification.components?.responses;
+assert.ok(responses, "OpenAPI v0.2 must define components.responses");
 
 function schema(name) {
   const value = schemas[name];
@@ -72,6 +74,8 @@ const enumContracts = new Map([
 test("OpenAPI v0.2 is self-contained and every local reference resolves", () => {
   assert.equal(specification.openapi, "3.1.0");
   assert.equal(specification.info?.version, "0.2.0-discovery");
+  assert.match(specification.info?.description ?? "", /loopback HTTP/);
+  assert.match(specification.info?.description ?? "", /not a production service/);
   visit(specification);
 });
 
@@ -170,13 +174,14 @@ test("reservation request cannot grant its own disclosure privilege", () => {
     "disclosureLevel",
     "canDiscloseDestination",
     "includeAddress",
+    "idempotentReplay",
   ];
   for (const field of forbiddenPrivilegeFields) {
     assert.equal(field in request.properties, false, `Reservation input must not accept caller privilege field ${field}`);
   }
 });
 
-test("destination is an optional authorised reservation-response concept only", () => {
+test("destination is an optional separately authorised reservation-response concept only", () => {
   const reservation = schema("Reservation");
   assert.equal(reservation.properties.destination.$ref, "#/components/schemas/ProviderDestination");
   assert.equal(reservation.required.includes("destination"), false);
@@ -184,6 +189,9 @@ test("destination is an optional authorised reservation-response concept only", 
   const discoveryItem = schema("ServiceDiscoveryItem");
   assert.equal(discoveryItem.properties.service.$ref, "#/components/schemas/PublicService");
   assert.equal(JSON.stringify(discoveryItem).includes("ProviderDestination"), false);
+
+  const reservationOperation = specification.paths?.["/v1/reservations"]?.post;
+  assert.match(reservationOperation?.description ?? "", /always suppresses destination disclosure/);
 });
 
 test("provider capability metadata prevents live feed from implying booking support", () => {
@@ -196,17 +204,17 @@ test("provider capability metadata prevents live feed from implying booking supp
   assert.equal(readOnly.capabilities.reservationMode, "EXTERNAL_MANUAL");
 });
 
-test("OpenAPI evidence labels distinguish tested semantics from future HTTP shapes", () => {
+test("OpenAPI evidence labels distinguish proven synthetic HTTP from future operations", () => {
   const expected = new Map([
-    ["GET /v1/services/search", "contract-only"],
-    ["POST /v1/matches", "semantic-flow-tested"],
-    ["GET /v1/services/{service_id}/availability", "semantic-flow-tested"],
-    ["POST /v1/referrals", "semantic-flow-tested-minimal"],
+    ["GET /v1/services/search", "synthetic-http-tested"],
+    ["POST /v1/matches", "synthetic-http-tested"],
+    ["GET /v1/services/{service_id}/availability", "synthetic-http-tested"],
+    ["POST /v1/referrals", "synthetic-http-authz-tested-minimal"],
     ["GET /v1/referrals/{referral_id}", "state-modeled-http-not-implemented"],
-    ["POST /v1/holds", "semantic-flow-tested"],
+    ["POST /v1/holds", "synthetic-http-authz-tested"],
     ["DELETE /v1/holds/{hold_id}", "adapter-modeled-http-not-implemented"],
-    ["POST /v1/reservations", "semantic-flow-tested"],
-    ["POST /v1/placements/{reservation_id}/arrival", "semantic-flow-tested"],
+    ["POST /v1/reservations", "synthetic-http-authz-tested"],
+    ["POST /v1/placements/{reservation_id}/arrival", "synthetic-http-authz-tested"],
   ]);
 
   for (const [operation, evidence] of expected) {
@@ -219,4 +227,32 @@ test("OpenAPI evidence labels distinguish tested semantics from future HTTP shap
       `${operation} evidence label drifted`,
     );
   }
+});
+
+test("placement HTTP conflict vocabulary includes idempotency without conflating capacity or provider state", () => {
+  const problemCodes = schema("ProblemCode").enum;
+  for (const code of [
+    "VALIDATION_FAILED",
+    "FORBIDDEN",
+    "NOT_FOUND",
+    "PROVIDER_UNAVAILABLE",
+    "CAPACITY_CONFLICT",
+    "IDEMPOTENCY_CONFLICT",
+    "UNSUPPORTED_PROVIDER_CAPABILITY",
+    "INVALID_TRANSITION",
+  ]) {
+    assert.ok(problemCodes.includes(code), `Missing HTTP ProblemCode ${code}`);
+  }
+  assert.equal(problemCodes.includes("INVALID_PROVIDER_TRANSITION"), false);
+
+  assert.ok(responses.PlacementConflict, "PlacementConflict response component must exist");
+  assert.ok(responses.IdempotencyConflict, "IdempotencyConflict response component must exist");
+  assert.equal(
+    specification.paths?.["/v1/holds"]?.post?.responses?.["409"]?.$ref,
+    "#/components/responses/PlacementConflict",
+  );
+  assert.equal(
+    specification.paths?.["/v1/reservations"]?.post?.responses?.["409"]?.$ref,
+    "#/components/responses/PlacementConflict",
+  );
 });
